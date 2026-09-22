@@ -17,21 +17,15 @@
  */
 package com.wultra.security.powerauth.test.v31;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.google.common.io.BaseEncoding;
-import com.wultra.security.powerauth.client.PowerAuthClient;
-import com.wultra.security.powerauth.client.v3.VerifyECDSASignatureResponse;
+import com.wultra.security.powerauth.client.v3.PowerAuthClient;
 import com.wultra.security.powerauth.configuration.PowerAuthTestConfiguration;
-import io.getlime.core.rest.model.base.response.ErrorResponse;
-import io.getlime.security.powerauth.crypto.lib.enums.PowerAuthSignatureTypes;
-import io.getlime.security.powerauth.crypto.lib.generator.HashBasedCounter;
-import io.getlime.security.powerauth.crypto.lib.util.SignatureUtils;
-import io.getlime.security.powerauth.lib.cmd.logging.ObjectStepLogger;
-import io.getlime.security.powerauth.lib.cmd.logging.model.StepItem;
-import io.getlime.security.powerauth.lib.cmd.steps.model.VaultUnlockStepModel;
-import io.getlime.security.powerauth.lib.cmd.steps.v3.VaultUnlockStep;
-import io.getlime.security.powerauth.lib.cmd.util.CounterUtil;
-import io.getlime.security.powerauth.rest.api.model.response.v3.EciesEncryptedResponse;
+import com.wultra.security.powerauth.lib.cmd.steps.model.SignAsymmetricStepModel;
+import com.wultra.security.powerauth.test.shared.v3.PowerAuthVaultUnlockShared;
+import com.wultra.security.powerauth.crypto.lib.enums.PowerAuthCodeType;
+import com.wultra.security.powerauth.lib.cmd.consts.PowerAuthVersion;
+import com.wultra.security.powerauth.lib.cmd.logging.ObjectStepLogger;
+import com.wultra.security.powerauth.lib.cmd.steps.model.VaultUnlockStepModel;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -40,24 +34,30 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
 
-import java.nio.charset.StandardCharsets;
-import java.security.PrivateKey;
+import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.HashMap;
-import java.util.Map;
 
-import static org.junit.jupiter.api.Assertions.*;
-
+/**
+ * PowerAuth vault unlock tests.
+ *
+ * @author Roman Strobl, roman.strobl@wultra.com
+ */
 @ExtendWith(SpringExtension.class)
 @SpringBootTest(classes = PowerAuthTestConfiguration.class)
 @EnableConfigurationProperties
 class PowerAuthVaultUnlockTest {
 
+    private static final PowerAuthVersion VERSION = PowerAuthVersion.V3_1;
+
     private PowerAuthTestConfiguration config;
+    private static File dataFile;
     private PowerAuthClient powerAuthClient;
     private VaultUnlockStepModel model;
     private ObjectStepLogger stepLogger;
-
-    private SignatureUtils signatureUtils = new SignatureUtils();
 
     @Autowired
     public void setPowerAuthTestConfiguration(PowerAuthTestConfiguration config) {
@@ -69,6 +69,14 @@ class PowerAuthVaultUnlockTest {
         this.powerAuthClient = powerAuthClient;
     }
 
+    @BeforeAll
+    static void setUpBeforeClass() throws IOException {
+        dataFile = File.createTempFile("data", ".txt");
+        FileWriter fw = new FileWriter(dataFile);
+        fw.write("Confidential test message used for testing");
+        fw.close();
+    }
+
     @BeforeEach
     void setUp() {
         model = new VaultUnlockStepModel();
@@ -76,279 +84,90 @@ class PowerAuthVaultUnlockTest {
         model.setApplicationSecret(config.getApplicationSecret());
         model.setHeaders(new HashMap<>());
         model.setPassword(config.getPassword());
-        model.setResultStatusObject(config.getResultStatusObjectV31());
-        model.setStatusFileName(config.getStatusFileV31().getAbsolutePath());
-        model.setSignatureType(PowerAuthSignatureTypes.POSSESSION_KNOWLEDGE);
+        model.setResultStatusObject(config.getResultStatusObject(VERSION));
+        model.setStatusFileName(config.getStatusFile(VERSION).getAbsolutePath());
+        model.setAuthenticationCodeType(PowerAuthCodeType.POSSESSION_KNOWLEDGE);
         model.setUriString(config.getPowerAuthIntegrationUrl());
-        model.setReason("TEST_3.1");
-        model.setVersion("3.1");
+        model.setReason("TEST_" + VERSION);
+        model.setVersion(VERSION);
 
         stepLogger = new ObjectStepLogger(System.out);
     }
 
     @Test
     void vaultUnlockTest() throws Exception {
-        new VaultUnlockStep().execute(stepLogger, model.toMap());
-        assertTrue(stepLogger.getResult().isSuccess());
-        assertEquals(200, stepLogger.getResponse().getStatusCode());
-
-        boolean keyDecryptionSuccessful = false;
-        for (StepItem item: stepLogger.getItems()) {
-            if (item.getName().equals("Vault Unlocked")) {
-                Map<String, Object> responseMap = (Map<String, Object>) item.getObject();
-                assertEquals("true", responseMap.get("privateKeyDecryptionSuccessful"));
-                keyDecryptionSuccessful = true;
-            }
-        }
-        assertTrue(keyDecryptionSuccessful);
+        PowerAuthVaultUnlockShared.vaultUnlockTest(model, stepLogger);
     }
 
     @Test
     void vaultUnlockInvalidPasswordTest() throws Exception {
-        model.setPassword("1111");
-
-        new VaultUnlockStep().execute(stepLogger, model.toMap());
-        assertFalse(stepLogger.getResult().isSuccess());
-        assertEquals(401, stepLogger.getResponse().getStatusCode());
-
-        ObjectMapper objectMapper = config.getObjectMapper();
-        ErrorResponse errorResponse = objectMapper.readValue(stepLogger.getResponse().getResponseObject().toString(), ErrorResponse.class);
-        assertEquals("ERROR", errorResponse.getStatus());
-        checkSignatureError(errorResponse);
+        PowerAuthVaultUnlockShared.vaultUnlockInvalidPasswordTest(config, model, stepLogger);
     }
 
     @Test
     void vaultUnlockSingleFactorTest() throws Exception {
-        model.setSignatureType(PowerAuthSignatureTypes.POSSESSION);
-
-        new VaultUnlockStep().execute(stepLogger, model.toMap());
-        assertFalse(stepLogger.getResult().isSuccess());
-        // Verify BAD_REQUEST status code
-        assertEquals(400, stepLogger.getResponse().getStatusCode());
-
-        ObjectMapper objectMapper = config.getObjectMapper();
-        ErrorResponse errorResponse = objectMapper.readValue(stepLogger.getResponse().getResponseObject().toString(), ErrorResponse.class);
-        assertEquals("ERROR", errorResponse.getStatus());
-        assertEquals("ERR_SECURE_VAULT", errorResponse.getResponseObject().getCode());
-        assertEquals("POWER_AUTH_SECURE_VAULT_INVALID", errorResponse.getResponseObject().getMessage());
+        PowerAuthVaultUnlockShared.vaultUnlockSingleFactorTest(config, model, stepLogger);
     }
 
     @Test
     void vaultUnlockBiometryFactorTest() throws Exception {
-        model.setSignatureType(PowerAuthSignatureTypes.POSSESSION_BIOMETRY);
-
-        new VaultUnlockStep().execute(stepLogger, model.toMap());
-        assertFalse(stepLogger.getResult().isSuccess());
-        assertEquals(400, stepLogger.getResponse().getStatusCode());
-    }
-
-    @Test
-    void vaultUnlockThreeFactorTest() throws Exception {
-        model.setSignatureType(PowerAuthSignatureTypes.POSSESSION_KNOWLEDGE_BIOMETRY);
-
-        new VaultUnlockStep().execute(stepLogger, model.toMap());
-        assertFalse(stepLogger.getResult().isSuccess());
-        assertEquals(400, stepLogger.getResponse().getStatusCode());
+        PowerAuthVaultUnlockShared.vaultUnlockBiometryFactorTest(model, stepLogger);
     }
 
     @Test
     void vaultUnlockBlockedActivationTest() throws Exception {
-        powerAuthClient.blockActivation(config.getActivationIdV31(), "test", "test");
-
-        ObjectStepLogger stepLogger1 = new ObjectStepLogger(System.out);
-        new VaultUnlockStep().execute(stepLogger1, model.toMap());
-        assertFalse(stepLogger1.getResult().isSuccess());
-        assertEquals(401, stepLogger1.getResponse().getStatusCode());
-
-        ObjectMapper objectMapper = config.getObjectMapper();
-        ErrorResponse errorResponse = objectMapper.readValue(stepLogger1.getResponse().getResponseObject().toString(), ErrorResponse.class);
-        assertEquals("ERROR", errorResponse.getStatus());
-        checkSignatureError(errorResponse);
-
-        powerAuthClient.unblockActivation(config.getActivationIdV31(), "test");
-
-        ObjectStepLogger stepLogger2 = new ObjectStepLogger();
-        new VaultUnlockStep().execute(stepLogger2, model.toMap());
-        assertTrue(stepLogger2.getResult().isSuccess());
-        assertEquals(200, stepLogger2.getResponse().getStatusCode());
+        PowerAuthVaultUnlockShared.vaultUnlockBlockedActivationTest(powerAuthClient, config, model, VERSION);
     }
 
     @Test
     void vaultUnlockUnsupportedApplicationTest() throws Exception {
-        powerAuthClient.unsupportApplicationVersion(config.getApplicationId(), config.getApplicationVersionId());
-
-        ObjectStepLogger stepLogger1 = new ObjectStepLogger(System.out);
-        new VaultUnlockStep().execute(stepLogger1, model.toMap());
-        assertFalse(stepLogger1.getResult().isSuccess());
-        assertEquals(401, stepLogger1.getResponse().getStatusCode());
-
-        ObjectMapper objectMapper = config.getObjectMapper();
-        ErrorResponse errorResponse = objectMapper.readValue(stepLogger1.getResponse().getResponseObject().toString(), ErrorResponse.class);
-        assertEquals("ERROR", errorResponse.getStatus());
-        checkSignatureError(errorResponse);
-
-        powerAuthClient.supportApplicationVersion(config.getApplicationId(), config.getApplicationVersionId());
-
-        ObjectStepLogger stepLogger2 = new ObjectStepLogger(System.out);
-        new VaultUnlockStep().execute(stepLogger2, model.toMap());
-        assertTrue(stepLogger2.getResult().isSuccess());
-        assertEquals(200, stepLogger2.getResponse().getStatusCode());
-
-        EciesEncryptedResponse responseOK = (EciesEncryptedResponse) stepLogger2.getResponse().getResponseObject();
-        assertNotNull(responseOK.getEncryptedData());
-        assertNotNull(responseOK.getMac());
+        PowerAuthVaultUnlockShared.vaultUnlockUnsupportedApplicationTest(powerAuthClient, config, model);
     }
 
     @Test
     void vaultUnlockCounterIncrementTest() throws Exception {
-        byte[] ctrData = CounterUtil.getCtrData(model, stepLogger);
-        new VaultUnlockStep().execute(stepLogger, model.toMap());
-        assertTrue(stepLogger.getResult().isSuccess());
-        assertEquals(200, stepLogger.getResponse().getStatusCode());
-
-        // Verify counter after createToken - in version 3.0 the counter is incremented once
-        byte[] ctrDataExpected = new HashBasedCounter().next(ctrData);
-        assertArrayEquals(ctrDataExpected, CounterUtil.getCtrData(model, this.stepLogger));
+        PowerAuthVaultUnlockShared.vaultUnlockCounterIncrementTest(model, stepLogger, VERSION);
     }
 
     @Test
     void vaultUnlockTooLongReasonTest() throws Exception {
-        model.setReason("vt39nW6ZM963PJ8qxiREICZqK5medvUN8YizLDaLYTlMUtXyvdkqG3fMda29eCRHwAeAUsB415HqUlYZoDeEkvCOQzhu8ZpTGahAZVROi0YcNNGizecpzLDQUzRPbzVbHfJRd5zUasU3npS7FE9WZSqVfpLEthrPRN40efWxmKHxTzCUbHkk11odipkavelkG64mUgrdX0STh22vL4hE8jMjOM86HIT0rZHx2EhC1muJvtdDxWK3pz3Z9s2GHKj0");
-
-        new VaultUnlockStep().execute(stepLogger, model.toMap());
-        assertFalse(stepLogger.getResult().isSuccess());
-        assertEquals(400, stepLogger.getResponse().getStatusCode());
-
-        ObjectMapper objectMapper = config.getObjectMapper();
-        ErrorResponse errorResponse = objectMapper.readValue(stepLogger.getResponse().getResponseObject().toString(), ErrorResponse.class);
-        assertEquals("ERROR", errorResponse.getStatus());
-        assertEquals("ERR_SECURE_VAULT", errorResponse.getResponseObject().getCode());
-        assertEquals("POWER_AUTH_SECURE_VAULT_INVALID", errorResponse.getResponseObject().getMessage());
+        PowerAuthVaultUnlockShared.vaultUnlockTooLongReasonTest(config, model, stepLogger);
     }
 
     @Test
     void vaultUnlockAndECDSASignatureValidTest() throws Exception {
-        byte[] dataBytes = "test_data_v31".getBytes(StandardCharsets.UTF_8);
-        String data = BaseEncoding.base64().encode(dataBytes);
-
-        // Obtain the device private key using vault unlock
-        new VaultUnlockStep().execute(stepLogger, model.toMap());
-        assertTrue(stepLogger.getResult().isSuccess());
-        assertEquals(200, stepLogger.getResponse().getStatusCode());
-
-        boolean keyDecryptionSuccessful = false;
-        String devicePrivateKeyBase64 = null;
-        for (StepItem item: stepLogger.getItems()) {
-            if (item.getName().equals("Vault Unlocked")) {
-                Map<String, Object> responseMap = (Map<String, Object>) item.getObject();
-                assertEquals("true", responseMap.get("privateKeyDecryptionSuccessful"));
-                keyDecryptionSuccessful = true;
-                devicePrivateKeyBase64 = (String) responseMap.get("devicePrivateKey");
-            }
-        }
-        assertTrue(keyDecryptionSuccessful);
-
-        PrivateKey devicePrivateKey = config.getKeyConvertor().convertBytesToPrivateKey(BaseEncoding.base64().decode(devicePrivateKeyBase64));
-
-        byte[] signature = signatureUtils.computeECDSASignature(dataBytes, devicePrivateKey);
-
-        VerifyECDSASignatureResponse verifyResponse = powerAuthClient.verifyECDSASignature(config.getActivationIdV31(), data, BaseEncoding.base64().encode(signature));
-        assertTrue(verifyResponse.isSignatureValid());
+        PowerAuthVaultUnlockShared.vaultUnlockAndECDSASignatureValidTest(powerAuthClient, config, model, stepLogger, VERSION);
     }
 
     @Test
     void vaultUnlockAndECDSASignatureInvalidTest() throws Exception {
-        byte[] dataBytes = "test_data_v31".getBytes(StandardCharsets.UTF_8);
-        String data = BaseEncoding.base64().encode(dataBytes);
-
-        // Obtain the device private key using vault unlock
-        new VaultUnlockStep().execute(stepLogger, model.toMap());
-        assertTrue(stepLogger.getResult().isSuccess());
-        assertEquals(200, stepLogger.getResponse().getStatusCode());
-
-        boolean keyDecryptionSuccessful = false;
-        String devicePrivateKeyBase64 = null;
-        for (StepItem item: stepLogger.getItems()) {
-            if (item.getName().equals("Vault Unlocked")) {
-                Map<String, Object> responseMap = (Map<String, Object>) item.getObject();
-                assertEquals("true", responseMap.get("privateKeyDecryptionSuccessful"));
-                keyDecryptionSuccessful = true;
-                devicePrivateKeyBase64 = (String) responseMap.get("devicePrivateKey");
-            }
-        }
-        assertTrue(keyDecryptionSuccessful);
-
-        PrivateKey devicePrivateKey = config.getKeyConvertor().convertBytesToPrivateKey(BaseEncoding.base64().decode(devicePrivateKeyBase64));
-
-        byte[] signature = signatureUtils.computeECDSASignature("test_data_crippled".getBytes(StandardCharsets.UTF_8), devicePrivateKey);
-
-        VerifyECDSASignatureResponse verifyResponse = powerAuthClient.verifyECDSASignature(config.getActivationIdV31(), data, BaseEncoding.base64().encode(signature));
-        assertFalse(verifyResponse.isSignatureValid());
+        PowerAuthVaultUnlockShared.vaultUnlockAndECDSASignatureInvalidTest(powerAuthClient, config, model, stepLogger, VERSION);
     }
 
     @Test
     void vaultUnlockAndECDSASignatureInvalidActivationTest() throws Exception {
-        byte[] dataBytes = "test_data_v31".getBytes(StandardCharsets.UTF_8);
-        String data = BaseEncoding.base64().encode(dataBytes);
-
-        // Obtain the device private key using vault unlock
-        new VaultUnlockStep().execute(stepLogger, model.toMap());
-        assertTrue(stepLogger.getResult().isSuccess());
-        assertEquals(200, stepLogger.getResponse().getStatusCode());
-
-        boolean keyDecryptionSuccessful = false;
-        String devicePrivateKeyBase64 = null;
-        for (StepItem item: stepLogger.getItems()) {
-            if (item.getName().equals("Vault Unlocked")) {
-                Map<String, Object> responseMap = (Map<String, Object>) item.getObject();
-                assertEquals("true", responseMap.get("privateKeyDecryptionSuccessful"));
-                keyDecryptionSuccessful = true;
-                devicePrivateKeyBase64 = (String) responseMap.get("devicePrivateKey");
-            }
-        }
-        assertTrue(keyDecryptionSuccessful);
-
-        PrivateKey devicePrivateKey = config.getKeyConvertor().convertBytesToPrivateKey(BaseEncoding.base64().decode(devicePrivateKeyBase64));
-
-        byte[] signature = signatureUtils.computeECDSASignature(dataBytes, devicePrivateKey);
-
-        VerifyECDSASignatureResponse verifyResponse = powerAuthClient.verifyECDSASignature(config.getActivationIdV2(), data, BaseEncoding.base64().encode(signature));
-        assertFalse(verifyResponse.isSignatureValid());
+        PowerAuthVaultUnlockShared.vaultUnlockAndECDSASignatureInvalidActivationTest(powerAuthClient, config, model, stepLogger, VERSION);
     }
 
     @Test
     void vaultUnlockAndECDSASignatureNonExistentActivationTest() throws Exception {
-        byte[] dataBytes = "test_data_v31".getBytes(StandardCharsets.UTF_8);
-        String data = BaseEncoding.base64().encode(dataBytes);
-
-        // Obtain the device private key using vault unlock
-        new VaultUnlockStep().execute(stepLogger, model.toMap());
-        assertTrue(stepLogger.getResult().isSuccess());
-        assertEquals(200, stepLogger.getResponse().getStatusCode());
-
-        boolean keyDecryptionSuccessful = false;
-        String devicePrivateKeyBase64 = null;
-        for (StepItem item: stepLogger.getItems()) {
-            if (item.getName().equals("Vault Unlocked")) {
-                Map<String, Object> responseMap = (Map<String, Object>) item.getObject();
-                assertEquals("true", responseMap.get("privateKeyDecryptionSuccessful"));
-                keyDecryptionSuccessful = true;
-                devicePrivateKeyBase64 = (String) responseMap.get("devicePrivateKey");
-            }
-        }
-        assertTrue(keyDecryptionSuccessful);
-
-        PrivateKey devicePrivateKey = config.getKeyConvertor().convertBytesToPrivateKey(BaseEncoding.base64().decode(devicePrivateKeyBase64));
-
-        byte[] signature = signatureUtils.computeECDSASignature(dataBytes, devicePrivateKey);
-
-        VerifyECDSASignatureResponse verifyResponse = powerAuthClient.verifyECDSASignature("AAAAA-BBBBB-CCCCC-DDDDD", data, BaseEncoding.base64().encode(signature));
-        assertFalse(verifyResponse.isSignatureValid());
+        PowerAuthVaultUnlockShared.vaultUnlockAndECDSASignatureNonExistentActivationTest(powerAuthClient, config, model, stepLogger, VERSION);
     }
 
-    private void checkSignatureError(ErrorResponse errorResponse) {
-        // Errors differ when Web Flow is used because of its Exception handler
-        assertTrue("POWERAUTH_AUTH_FAIL".equals(errorResponse.getResponseObject().getCode()) || "ERR_AUTHENTICATION".equals(errorResponse.getResponseObject().getCode()));
-        assertTrue("Signature validation failed".equals(errorResponse.getResponseObject().getMessage()) || "POWER_AUTH_SIGNATURE_INVALID".equals(errorResponse.getResponseObject().getMessage()));
+    @Test
+    void vaultUnlockDevicePrivateKeyAndSignTest() throws Exception {
+        final SignAsymmetricStepModel model = new SignAsymmetricStepModel();
+        model.setApplicationKey(config.getApplicationKey());
+        model.setApplicationSecret(config.getApplicationSecret());
+        model.setHeaders(new HashMap<>());
+        model.setPassword(config.getPassword());
+        model.setResultStatusObject(config.getResultStatusObject(VERSION));
+        model.setStatusFileName(config.getStatusFile(VERSION).getAbsolutePath());
+        model.setAuthenticationCodeType(PowerAuthCodeType.POSSESSION_KNOWLEDGE);
+        model.setUriString(config.getPowerAuthIntegrationUrl());
+        model.setData(Files.readAllBytes(Paths.get(dataFile.getAbsolutePath())));
+        model.setVersion(VERSION);
+        PowerAuthVaultUnlockShared.vaultUnlockDevicePrivateKeyAndSignTest(config, model, stepLogger, VERSION);
     }
+
 }

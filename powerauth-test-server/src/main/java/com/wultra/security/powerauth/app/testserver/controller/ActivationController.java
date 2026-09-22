@@ -18,20 +18,16 @@
 
 package com.wultra.security.powerauth.app.testserver.controller;
 
-import com.wultra.security.powerauth.app.testserver.errorhandling.ActivationFailedException;
-import com.wultra.security.powerauth.app.testserver.errorhandling.AppConfigNotFoundException;
-import com.wultra.security.powerauth.app.testserver.errorhandling.GenericCryptographyException;
-import com.wultra.security.powerauth.app.testserver.errorhandling.RemoteExecutionException;
+import com.wultra.security.powerauth.app.testserver.errorhandling.*;
 import com.wultra.security.powerauth.app.testserver.model.request.CreateActivationRequest;
 import com.wultra.security.powerauth.app.testserver.model.response.CreateActivationResponse;
 import com.wultra.security.powerauth.app.testserver.service.ActivationService;
-import io.getlime.core.rest.model.base.request.ObjectRequest;
-import io.getlime.core.rest.model.base.response.ObjectResponse;
+import com.wultra.core.rest.model.base.request.ObjectRequest;
+import com.wultra.core.rest.model.base.response.ObjectResponse;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestMethod;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.*;
+import jakarta.validation.Valid;
 
 /**
  * Controller for activation actions.
@@ -40,6 +36,7 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @RestController
 @RequestMapping("activation")
+@Validated
 public class ActivationController {
 
     private final ActivationService activationService;
@@ -62,8 +59,8 @@ public class ActivationController {
      * @throws RemoteExecutionException Thrown when remote execution fails.
      * @throws ActivationFailedException Thrown when activation fails.
      */
-    @RequestMapping(value = "create", method = RequestMethod.POST)
-    public ObjectResponse<CreateActivationResponse> createActivation(@RequestBody ObjectRequest<CreateActivationRequest> request) throws AppConfigNotFoundException, GenericCryptographyException, RemoteExecutionException, ActivationFailedException {
+    @PostMapping("create")
+    public ObjectResponse<CreateActivationResponse> createActivation(@Valid @RequestBody ObjectRequest<CreateActivationRequest> request) throws AppConfigNotFoundException, GenericCryptographyException, RemoteExecutionException, ActivationFailedException, AppConfigInvalidException {
         // TODO - input validation
         final CreateActivationResponse response = activationService.createActivation(request.getRequestObject());
         return new ObjectResponse<>(response);

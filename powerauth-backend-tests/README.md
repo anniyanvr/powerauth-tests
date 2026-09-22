@@ -6,13 +6,12 @@ PowerAuth backend end-to-end tests cover testing of the PowerAuth protocol using
 - [powerauth-restful-integration](https://github.com/wultra/powerauth-restful-integration)
 - [powerauth-cmd-tool](https://github.com/wultra/powerauth-cmd-tool)
 - [enrollment-server](https://github.com/wultra/enrollment-server-wultra)
-- [powerauth-webflow](https://github.com/wultra/powerauth-webflow) (optional, can replace `enrollment-server`)
 
 _Note: most of the above listed components contain unit tests, however such low level tests do not cover possible defects found when testing the solution as a whole, which is why this project was introduced._
 
 ## Supported Java Versions
 
-We recommend to use one of the LTS releases of Java for running the tests: 8, 11, or 17.
+We recommend to use one of the LTS releases of Java for running the tests: 17.
 
 ## Building a Release Version of PowerAuth Backends
 
@@ -30,24 +29,22 @@ Clone the following repositories and use the default `develop` branch to build t
 
 | Repository | Command | Result |
 |---|---|---|
-| https://github.com/wultra/lime-java-core | `mvn clean install` | the libraries are installed into local maven repository (.m2 folder) |
+| https://github.com/wultra/java-core | `mvn clean install` | the libraries are installed into local maven repository (.m2 folder) |
 | https://github.com/wultra/powerauth-crypto | `mvn clean install` | the libraries are installed into local maven repository (.m2 folder) |
 | https://github.com/wultra/powerauth-server | `mvn clean install` | the libraries are installed into local maven repository (.m2 folder) and the PowerAuth server artifact is available in `powerauth-java-server/target` |
 | https://github.com/wultra/powerauth-restful-integration | `mvn clean install` | the libraries are installed into local maven repository (.m2 folder) |
 | https://github.com/wultra/enrollment-server-wultra | `mvn clean install` | the Enrollment Server artifact is available in `enrollment-server/target` |
 | https://github.com/wultra/powerauth-cmd-tool | `mvn clean install` | the libraries are installed into local maven repository (.m2 folder) |
-| https://github.com/wultra/powerauth-webflow | `mvn clean install` | the libraries are installed into local maven repository (.m2 folder) and the artifacts are available in `powerauth-nextstep/target` and `powerauth-webflow/target` folders |
 
 ## Deploying PowerAuth Components
 
 We assume the tests will run on a local Tomcat instance. If you prefer to use Docker for running the server components, you can use the [PowerAuth Docker project](https://github.com/wultra/powerauth-docker). Do not run the applications directly from command line using `java -jar` command, this is not supported.
 
-1. Copy the previously built war files `powerauth-java-server.war` and `enrollment-server.war` into the `webapps` folder of Tomcat. In case you want to test Web Flow and Next Step (optional), copy the `powerauth-webflow.war` and `powerauth-nextstep.war` files, too.
+1. Copy the previously built war files `powerauth-java-server.war` and `enrollment-server.war` into the `webapps` folder of Tomcat.
 
 2. Run the DDL scripts for these two components:
  - [PowerAuth server DDL scripts](https://github.com/wultra/powerauth-server/tree/develop/docs/sql)
  - [Enrollment server DDL scripts](https://github.com/wultra/enrollment-server/tree/develop/docs/sql)
- - (Optional) [Web Flow DDL scripts](https://github.com/wultra/powerauth-webflow/tree/develop/docs/sql) - run the `initial_data.sql` script, too
 
 _Note: if you want to avoid additional configuration, use database, schema and user `powerauth` when setting up the database._ 
 
@@ -60,8 +57,6 @@ File `powerauth-java.server.xml`:
     <Parameter name="spring.datasource.url" value="jdbc:postgresql://localhost:5432/powerauth"/>
     <Parameter name="spring.datasource.username" value="powerauth"/>
     <Parameter name="spring.datasource.password" value="[PASSWORD]"/>
-    <Parameter name="spring.datasource.driver-class-name" value="org.postgresql.Driver"/>
-    <Parameter name="spring.jpa.database-platform" value="org.hibernate.dialect.PostgreSQLDialect"/>
 </Context>
 ```
 
@@ -72,7 +67,6 @@ File `enrollment-server.xml`:
     <Parameter name="spring.datasource.url" value="jdbc:postgresql://localhost:5432/powerauth"/>
     <Parameter name="spring.datasource.username" value="powerauth"/>
     <Parameter name="spring.datasource.password" value="[PASSWORD]"/>
-    <Parameter name="spring.datasource.driver-class-name" value="org.postgresql.Driver"/>
     <Parameter name="spring.jpa.database-platform" value="org.hibernate.dialect.PostgreSQLDialect"/>
     <Parameter name="powerauth.service.url" value="http://localhost:8080/powerauth-java-server/rest"/>
     <Parameter name="enrollment-server.activation-spawn.enabled" value="true"/>
@@ -85,8 +79,6 @@ Once you start the Tomcat server, you should see both applications up and runnin
 
 - PowerAuth server URL: http://localhost:8080/powerauth-java-server
 - Enrollment server URL: http://localhost:8080/enrollment-server
-- PowerAuth Web Flow URL (optional): http://localhost:8080/powerauth-webflow/api/service/status
-- PowerAuth Next Step URL (optional): http://localhost:8080/powerauth-nextstep/api/service/status
 
 ## Test Configuration
 
@@ -113,12 +105,21 @@ powerauth.service.security.clientToken=
 powerauth.service.security.clientSecret=
 ```
 
-In case you want to test Web Flow and Next Step instead of Enrollment server, use the following configuration:
+
+### OIDC Activation
+
+OpenID Connect activation requires the provider configuration.
+If the properties are not filled, the test is ignored.
+Also a database entry must exist in the table `pa_application_config` with a config key `oauth2_providers` and appropriate config values.
+
 ```properties
-# URLs used when testing Web Flow and Next Step
-powerauth.integration.service.url=http://localhost:8080/powerauth-webflow
-powerauth.nextstep.service.url=http://localhost:8080/powerauth-nextstep
+# OIDC activation
+powerauth.test.activation.oidc.username=
+powerauth.test.activation.oidc.password=
+powerauth.test.activation.oidc.providerId=
+powerauth.test.activation.oidc.sub=
 ```
+
 
 ## Running Tests from Console
 

@@ -1,9 +1,27 @@
+/*
+ * PowerAuth test and related software components
+ * Copyright (C) 2025 Wultra s.r.o.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
 package com.wultra.security.powerauth.app.testserver.util;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import io.getlime.security.powerauth.lib.cmd.logging.model.StepItem;
+import com.wultra.security.powerauth.lib.cmd.logging.model.StepItem;
 import org.slf4j.Logger;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Logging helper class.
@@ -19,18 +37,18 @@ public class StepItemLogger {
             return;
         }
         String serializedObject = null;
-        if (item.getObject() != null) {
+        if (item.object() != null) {
             try {
-                serializedObject = objectMapper.writeValueAsString(item.getObject());
-            } catch (JsonProcessingException e) {
-                serializedObject = item.getObject().toString();
+                serializedObject = objectMapper.writeValueAsString(item.object());
+            } catch (JacksonException e) {
+                serializedObject = item.object().toString();
             }
         }
         logger.info("Log item with ID: {}, name: {}, description: {}, status: {}, object: {}",
-                item.getId(),
-                item.getName(),
-                item.getDescription(),
-                item.getStatus(),
+                item.id(),
+                item.name(),
+                item.description(),
+                item.status(),
                 serializedObject
         );
     }

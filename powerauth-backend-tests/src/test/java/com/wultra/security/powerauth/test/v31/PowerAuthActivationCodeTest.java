@@ -17,20 +17,13 @@
  */
 package com.wultra.security.powerauth.test.v31;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.google.common.io.BaseEncoding;
-import com.wultra.security.powerauth.client.PowerAuthClient;
 import com.wultra.security.powerauth.configuration.PowerAuthTestConfiguration;
-import io.getlime.core.rest.model.base.response.ObjectResponse;
-import io.getlime.security.powerauth.crypto.client.activation.PowerAuthClientActivation;
-import io.getlime.security.powerauth.crypto.lib.enums.PowerAuthSignatureTypes;
-import io.getlime.security.powerauth.lib.cmd.logging.ObjectStepLogger;
-import io.getlime.security.powerauth.lib.cmd.logging.model.StepItem;
-import io.getlime.security.powerauth.lib.cmd.steps.model.PrepareActivationStepModel;
-import io.getlime.security.powerauth.lib.cmd.steps.model.VerifySignatureStepModel;
-import io.getlime.security.powerauth.lib.cmd.steps.v3.PrepareActivationStep;
-import io.getlime.security.powerauth.lib.cmd.steps.v3.SignAndEncryptStep;
+import com.wultra.security.powerauth.test.shared.PowerAuthActivationCodeShared;
+import com.wultra.security.powerauth.crypto.lib.enums.PowerAuthCodeType;
+import com.wultra.security.powerauth.lib.cmd.consts.PowerAuthVersion;
+import com.wultra.security.powerauth.lib.cmd.logging.ObjectStepLogger;
+import com.wultra.security.powerauth.lib.cmd.steps.model.PrepareActivationStepModel;
+import com.wultra.security.powerauth.lib.cmd.steps.model.VerifyAuthenticationStepModel;
 import org.json.simple.JSONObject;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -39,37 +32,32 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.junit.jupiter.EnabledIf;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
 
-import java.io.BufferedWriter;
 import java.io.File;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Paths;
-import java.util.*;
+import java.util.HashMap;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.junit.jupiter.api.Assumptions.assumeFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * PowerAuth activation with activation code tests.
+ *
+ * @author Roman Strobl, roman.strobl@wultra.com
+ */
 @ExtendWith(SpringExtension.class)
 @SpringBootTest(classes = PowerAuthTestConfiguration.class)
 @EnableConfigurationProperties
 public class PowerAuthActivationCodeTest {
 
-    private PowerAuthClient powerAuthClient;
+    private static final PowerAuthVersion VERSION = PowerAuthVersion.V3_1;
+
     private PowerAuthTestConfiguration config;
     private PrepareActivationStepModel activationModel;
-    private VerifySignatureStepModel signatureModel;
+    private VerifyAuthenticationStepModel signatureModel;
     private File tempStatusFile;
     private ObjectStepLogger stepLogger;
-
-    private final PowerAuthClientActivation clientActivation = new PowerAuthClientActivation();
-
-    @Autowired
-    public void setPowerAuthClient(PowerAuthClient powerAuthClient) {
-        this.powerAuthClient = powerAuthClient;
-    }
 
     @Autowired
     public void setPowerAuthTestConfiguration(PowerAuthTestConfiguration config) {
@@ -79,32 +67,32 @@ public class PowerAuthActivationCodeTest {
     @BeforeEach
     void setUp() throws IOException {
         // Create temp status file
-        tempStatusFile = File.createTempFile("pa_status_v31", ".json");
+        tempStatusFile = File.createTempFile("pa_status_" + VERSION, ".json");
 
         // Model shared among tests
         activationModel = new PrepareActivationStepModel();
-        activationModel.setActivationName("test v31");
+        activationModel.setActivationName("test v" + VERSION);
         activationModel.setApplicationKey(config.getApplicationKey());
         activationModel.setApplicationSecret(config.getApplicationSecret());
-        activationModel.setMasterPublicKey(config.getMasterPublicKey());
+        activationModel.setMasterPublicKeyP256(config.getMasterPublicKeyP256());
         activationModel.setHeaders(new HashMap<>());
         activationModel.setPassword(config.getPassword());
         activationModel.setStatusFileName(tempStatusFile.getAbsolutePath());
         activationModel.setResultStatusObject(new JSONObject());
         activationModel.setUriString(config.getPowerAuthIntegrationUrl());
-        activationModel.setVersion("3.1");
+        activationModel.setVersion(VERSION);
         activationModel.setDeviceInfo("backend-tests");
 
-        signatureModel = new VerifySignatureStepModel();
+        signatureModel = new VerifyAuthenticationStepModel();
         signatureModel.setApplicationKey(config.getApplicationKey());
         signatureModel.setApplicationSecret(config.getApplicationSecret());
-        signatureModel.setSignatureType(PowerAuthSignatureTypes.POSSESSION_BIOMETRY);
+        signatureModel.setAuthenticationCodeType(PowerAuthCodeType.POSSESSION_KNOWLEDGE);
         signatureModel.setPassword(config.getPassword());
         signatureModel.setHttpMethod("POST");
         signatureModel.setHeaders(new HashMap<>());
         signatureModel.setStatusFileName(tempStatusFile.getAbsolutePath());
-        signatureModel.setResultStatusObject(config.getResultStatusObjectV31());
-        signatureModel.setVersion("3.1");
+        signatureModel.setResultStatusObject(config.getResultStatusObject(VERSION));
+        signatureModel.setVersion(VERSION);
         signatureModel.setDryRun(false);
 
         stepLogger = new ObjectStepLogger(System.out);
@@ -116,74 +104,8 @@ public class PowerAuthActivationCodeTest {
     }
 
     @Test
+    @EnabledIf(expression = "${powerauth.test.includeCustomTests}", loadContext = true)
     void activationUsingActivationCodeTest() throws Exception {
-        // Run this test only in case Enrollment server is available
-        assumeFalse(config.getEnrollmentServiceUrl().isEmpty());
-
-        // Obtain activation code from enrollment server
-        signatureModel.setResourceId("/api/activation/code");
-        signatureModel.setUriString(config.getEnrollmentServiceUrl() + "/api/activation/code");
-
-        File dataFile = File.createTempFile("data_activation_code", ".dat");
-        dataFile.deleteOnExit();
-        BufferedWriter out = Files.newBufferedWriter(dataFile.toPath(), StandardCharsets.UTF_8);
-
-        String additionalActivationOtp = UUID.randomUUID().toString();
-
-        String requestData = "{\n" +
-                "  \"requestObject\": {\n" +
-                "    \"applicationId\": \"" + config.getApplicationName() + "\",\n" +
-                "    \"otp\": \"" + additionalActivationOtp + "\"\n" +
-                "  }\n" +
-                "}";
-        out.write(requestData);
-        out.close();
-
-        signatureModel.setData(Files.readAllBytes(Paths.get(dataFile.getAbsolutePath())));
-
-        new SignAndEncryptStep().execute(stepLogger, signatureModel.toMap());
-        assertTrue(stepLogger.getResult().isSuccess());
-        assertEquals(200, stepLogger.getResponse().getStatusCode());
-
-        boolean responseSuccessfullyDecrypted = false;
-        String activationId = null;
-        String activationCode = null;
-        String activationSignature = null;
-        for (StepItem item: stepLogger.getItems()) {
-            if (item.getName().equals("Decrypted Response")) {
-                ObjectMapper objectMapper = config.getObjectMapper();
-                TypeReference<ObjectResponse<LinkedHashMap<String, String>>> responseType = new TypeReference<ObjectResponse<LinkedHashMap<String, String>>>(){};
-                ObjectResponse<LinkedHashMap<String, String>> responseData = objectMapper.readValue(item.getObject().toString(), responseType);
-                activationId = responseData.getResponseObject().get("activationId");
-                activationCode = responseData.getResponseObject().get("activationCode");
-                activationSignature = responseData.getResponseObject().get("activationSignature");
-                responseSuccessfullyDecrypted = true;
-                break;
-            }
-        }
-        assertTrue(responseSuccessfullyDecrypted);
-        assertNotNull(activationId);
-        assertNotNull(activationCode);
-        assertNotNull(activationSignature);
-
-        byte[] activationSignatureBytes = BaseEncoding.base64().decode(activationSignature);
-
-        // Verify activation signature
-        try {
-            boolean activationSignatureOK = clientActivation.verifyActivationCodeSignature(activationCode, activationSignatureBytes, config.getMasterPublicKey());
-            assertTrue(activationSignatureOK);
-        } catch (Throwable t) {
-            t.printStackTrace();
-        }
-
-        // Create a new activation using received activation code and generated OTP
-        activationModel.setActivationCode(activationCode);
-        activationModel.setAdditionalActivationOtp(additionalActivationOtp);
-        ObjectStepLogger stepLoggerPrepare = new ObjectStepLogger(System.out);
-        new PrepareActivationStep().execute(stepLoggerPrepare, activationModel.toMap());
-        assertTrue(stepLoggerPrepare.getResult().isSuccess());
-        assertEquals(200, stepLoggerPrepare.getResponse().getStatusCode());
-
-        // Activations with OTP on key exchange are committed automatically
+        PowerAuthActivationCodeShared.activationUsingActivationCodeTest(config, activationModel, signatureModel, stepLogger);
     }
 }

@@ -18,15 +18,16 @@
 
 package com.wultra.security.powerauth.app.testserver.database.entity;
 
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
 
-import javax.persistence.Column;
-import javax.persistence.Entity;
-import javax.persistence.Id;
-import javax.persistence.Table;
+import java.io.Serial;
 import java.io.Serializable;
 import java.util.Objects;
 
@@ -43,14 +44,18 @@ import java.util.Objects;
 @Table(name = "pa_test_status")
 public class TestStatusEntity implements Serializable {
 
+    @Serial
     private static final long serialVersionUID = -6389531428000326009L;
 
     @Id
     @Column(name = "activation_id", nullable = false)
     private String activationId;
 
-    @Column(name = "server_public_key", nullable = false)
-    private String serverPublicKey;
+    @Column(name = "ec_server_public_key")
+    private String ecServerPublicKey;
+
+    @Column(name = "pqc_server_public_key", columnDefinition = "TEXT")
+    private String pqcServerPublicKey;
 
     @Column(name = "counter", nullable = false)
     private Long counter;
@@ -58,23 +63,75 @@ public class TestStatusEntity implements Serializable {
     @Column(name = "ctr_data", nullable = false)
     private String ctrData;
 
-    @Column(name = "encrypted_device_private_key", nullable = false)
+    @Column(name = "encrypted_ec_device_private_key")
+    private String encryptedEcDevicePrivateKey;
+
+    @Column(name = "encrypted_pqc_device_private_key", columnDefinition = "TEXT")
+    private String encryptedPqcDevicePrivateKey;
+
+    @Column(name = "ec_device_public_key")
+    private String ecDevicePublicKey;
+
+    @Column(name = "pqc_device_public_key", columnDefinition = "TEXT")
+    private String pqcDevicePublicKey;
+
+    @Column(name = "biometry_factor_key")
+    private String biometryFactorKey;
+
+    @Column(name = "knowledge_factor_key_encrypted")
+    private String knowledgeFactorKeyEncrypted;
+
+    @Column(name = "knowledge_factor_key_salt")
+    private String knowledgeFactorKeySalt;
+
+    @Column(name = "possession_factor_key")
+    private String possessionFactorKey;
+
+    @Column(name = "shared_secret_algorithm")
+    private String sharedSecretAlgorithm;
+
+    @Column(name = "temporary_key_act_sign_request_key")
+    private String temporaryKeyActSignRequestKey;
+
+    @Column(name = "shared_info2_key")
+    private String sharedInfo2Key;
+
+    @Column(name = "mac_personalized_data_key")
+    private String macPersonalizedDataKey;
+
+    @Column(name = "status_blob_mac_key")
+    private String statusBlobMacKey;
+
+    @Column(name = "version")
+    private Long version;
+
+    @Deprecated
+    @Column(name = "transport_master_key")
+    private String transportMasterKey;
+
+    @Deprecated
+    @Column(name = "server_public_key")
+    private String serverPublicKey;
+
+    @Deprecated
+    @Column(name = "encrypted_device_private_key")
     private String encryptedDevicePrivateKey;
 
-    @Column(name = "signature_biometry_key", nullable = false)
+    @Deprecated
+    @Column(name = "signature_biometry_key")
     private String signatureBiometryKey;
 
-    @Column(name = "signature_knowledge_key_encrypted", nullable = false)
+    @Deprecated
+    @Column(name = "signature_knowledge_key_encrypted")
     private String signatureKnowledgeKeyEncrypted;
 
-    @Column(name = "signature_knowledge_key_salt", nullable = false)
+    @Deprecated
+    @Column(name = "signature_knowledge_key_salt")
     private String signatureKnowledgeKeySalt;
 
-    @Column(name = "signature_possession_key", nullable = false)
+    @Deprecated
+    @Column(name = "signature_possession_key")
     private String signaturePossessionKey;
-
-    @Column(name = "transport_master_key", nullable = false)
-    private String transportMasterKey;
 
     @Override
     public boolean equals(Object o) {
@@ -88,4 +145,5 @@ public class TestStatusEntity implements Serializable {
     public int hashCode() {
         return Objects.hash(activationId);
     }
+
 }

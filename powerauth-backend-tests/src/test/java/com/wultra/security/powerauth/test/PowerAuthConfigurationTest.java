@@ -18,6 +18,7 @@
 package com.wultra.security.powerauth.test;
 
 import com.wultra.security.powerauth.configuration.PowerAuthTestConfiguration;
+import com.wultra.security.powerauth.lib.cmd.consts.PowerAuthVersion;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -44,22 +45,25 @@ public class PowerAuthConfigurationTest {
     public void applicationSetUpTest() {
         assertNotNull(config.getApplicationId());
         assertNotNull(config.getApplicationVersionId());
-        assertNotNull(config.getMasterPublicKey());
-        assertNotEquals("", config.getMasterPublicKey());
+        assertNotNull(config.getMasterPublicKeyP256());
+        assertNotNull(config.getMasterPublicKeyP384());
+        assertNotNull(config.getMasterPublicKeyMlDsa65());
         assertNotNull(config.getApplicationKey());
         assertNotEquals("", config.getApplicationKey());
         assertNotNull(config.getApplicationSecret());
         assertNotEquals("", config.getApplicationSecret());
-        assertNotNull(config.getActivationIdV2());
-        assertNotNull(config.getActivationIdV3());
+        for (PowerAuthVersion version: PowerAuthVersion.ALL_VERSIONS) {
+            assertNotNull(config.getActivationId(version));
+        }
     }
 
     @Test
     public void activationSetUpTest() {
-        assertNotNull(config.getStatusFileV2());
-        assertNotNull(config.getResultStatusObjectV2());
-        assertNotNull(config.getStatusFileV3());
-        assertNotNull(config.getResultStatusObjectV3());
+        for (PowerAuthVersion version: PowerAuthVersion.values()) {
+            assertNotNull(config.getStatusFile(version));
+            assertNotNull(config.getResultStatusObject(version));
+            assertNotNull(config.getUser(version));
+        }
     }
 
 }

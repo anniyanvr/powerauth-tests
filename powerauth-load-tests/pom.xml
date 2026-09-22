@@ -3,9 +3,13 @@
 
     <modelVersion>4.0.0</modelVersion>
 
-    <groupId>com.wultra</groupId>
+    <parent>
+        <groupId>com.wultra</groupId>
+        <artifactId>powerauth-backend-tests-parent</artifactId>
+        <version>2.3.0-SNAPSHOT</version>
+    </parent>
+
     <artifactId>powerauth-load-tests</artifactId>
-    <version>1.2.0</version>
 
     <inceptionYear>2021</inceptionYear>
     <url>https://www.wultra.com</url>
@@ -33,31 +37,20 @@
     </developers>
 
     <properties>
-        <maven.compiler.source>1.8</maven.compiler.source>
-        <maven.compiler.target>1.8</maven.compiler.target>
+        <scala.version>2.13.13</scala.version>
 
-        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <scala.version>2.13.6</scala.version>
-        <scala.minor.version>2.13.6</scala.minor.version>
+        <maven-plugin-gatling.version>4.21.12</maven-plugin-gatling.version>
+        <maven-plugin-scala.version>4.9.10</maven-plugin-scala.version>
 
-        <maven-plugin-gatling.version>3.1.2</maven-plugin-gatling.version>
-        <maven-plugin-scala.version>4.5.4</maven-plugin-scala.version>
-        <maven-plugin-surefire.version>2.22.2</maven-plugin-surefire.version>
-
-        <bcprov.version>1.68</bcprov.version>
-        <gatling.version>3.6.1</gatling.version>
+        <!-- Gatling 3.13.5 is the latest version that is compatible with the current Spring Boot parent. -->
+        <!-- See: https://community.gatling.io/t/java-lang-noclassdeffounderror-io-netty-channel-iohandle/9672 -->
+        <gatling.version>3.15.1</gatling.version>
     </properties>
 
     <dependencies>
         <dependency>
-            <groupId>io.getlime.security</groupId>
+            <groupId>com.wultra.security</groupId>
             <artifactId>powerauth-java-cmd-lib</artifactId>
-            <version>${project.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>org.bouncycastle</groupId>
-            <artifactId>bcprov-jdk15on</artifactId>
-            <version>${bcprov.version}</version>
         </dependency>
 
         <!-- Gatling -->
@@ -67,18 +60,47 @@
             <version>${gatling.version}</version>
             <scope>test</scope>
         </dependency>
+
+        <dependency>
+            <groupId>io.gatling</groupId>
+            <artifactId>gatling-test-framework</artifactId>
+            <version>${gatling.version}</version>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.wiremock</groupId>
+            <artifactId>wiremock-standalone</artifactId>
+            <version>3.13.2</version>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-lang3</artifactId>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>
-        <testSourceDirectory>src/test/scala</testSourceDirectory>
         <plugins>
+            <!-- Scala Maven Plugin -->
             <plugin>
                 <groupId>net.alchim31.maven</groupId>
                 <artifactId>scala-maven-plugin</artifactId>
                 <version>${maven-plugin-scala.version}</version>
                 <executions>
                     <execution>
+                        <id>scala-test-compile</id>
+                        <phase>test-compile</phase>
                         <goals>
+                            <goal>add-source</goal>
                             <goal>testCompile</goal>
                         </goals>
                         <configuration>
@@ -86,20 +108,22 @@
                                 <jvmArg>-Xss100M</jvmArg>
                             </jvmArgs>
                             <args>
-                                <arg>-target:jvm-1.8</arg>
+                                <arg>-release:17</arg>
                                 <arg>-deprecation</arg>
                                 <arg>-feature</arg>
                                 <arg>-unchecked</arg>
                                 <arg>-language:implicitConversions</arg>
                                 <arg>-language:postfixOps</arg>
                             </args>
+                            <scalaVersion>${scala.version}</scalaVersion>
+                            <!-- Explicitly define Scala source directory for tests -->
+                            <testSourceDir>src/test/scala</testSourceDir>
                         </configuration>
                     </execution>
                 </executions>
-                <configuration>
-                    <scalaVersion>${scala.version}</scalaVersion>
-                </configuration>
             </plugin>
+
+            <!-- Gatling Maven Plugin -->
             <plugin>
                 <groupId>io.gatling</groupId>
                 <artifactId>gatling-maven-plugin</artifactId>
@@ -110,10 +134,11 @@
                     <runDescription>Wultra PowerAuth Load Test</runDescription>
                 </configuration>
             </plugin>
+
+            <!-- Maven Surefire Plugin -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
-                <version>${maven-plugin-surefire.version}</version>
                 <configuration>
                     <skipTests>true</skipTests>
                 </configuration>

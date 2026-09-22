@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>PowerAuth & FIDO2 Demo | Wultra</title>
+
+    <link rel="stylesheet" th:href="@{/resources/css/wultra-theme.min.css}">
+    <link rel="stylesheet" th:href="@{/resources/css/wultra-login.css}">
+    <link rel="shortcut icon" type="image/png" th:href="@{/resources/images/favicon.png}"/>
+
+    <!-- API Path Context of the spring controller -->
+    <script>
+        const SERVLET_CONTEXT_PATH = "[[${servletContextPath}]]";
+        const QUERY_PARAMS = "";
+    </script>
+    <script th:src="@{/resources/js/jquery.min.js}"></script>
+    <script th:src="@{/resources/js/webauthn.js}"></script>
+    <script th:src="@{/resources/js/login.js}"></script>
+</head>
+<body>
+
+<img th:src="@{/resources/images/logo_white.svg}" class="header-logo">
+
+<div class="content-wrapper">
+    <h5 class="header">DEMO</h5>
+    <h2 class="headline">PERSONAL IDENTITY DEVICE & FIDO2</h2>
+
+    <div class="flex-grid">
+        <div class="col1">
+            <div>
+                <p class="body-copy">
+                    Discover Talisman in action with our interactive demo. Experience effortless and secure
+                    authentication for your digital services. See firsthand how to connect and manage multiple accounts
+                    with advanced security features.
+                </p>
+                <p class="body-copy">
+                    For instructions and more information, visit <a href="http://www.wultra.com/demo/talisman">Demo | Wultra Talisman</a>.
+                </p>
+                <p class="body-copy">
+                    You can find the user manual here: <a href="https://www.wultra.com/manuals/hardware-authenticator">Hardware Token Specifications</a>
+                </p>
+            </div>
+        </div>
+
+        <div class="col2">
+            <div class="form-wrapper" th:insert="~{forms/loginForm.html}">
+            </div>
+        </div>
+    </div>
+</div>
+</body>
+</html>

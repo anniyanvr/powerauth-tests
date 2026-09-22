@@ -17,16 +17,19 @@
  */
 package com.wultra.security.powerauth.app.testserver.service;
 
-import com.google.common.io.BaseEncoding;
 import com.wultra.security.powerauth.app.testserver.database.TestConfigRepository;
 import com.wultra.security.powerauth.app.testserver.database.entity.TestConfigEntity;
 import com.wultra.security.powerauth.app.testserver.errorhandling.AppConfigNotFoundException;
 import com.wultra.security.powerauth.app.testserver.errorhandling.GenericCryptographyException;
-import io.getlime.security.powerauth.crypto.lib.util.KeyConvertor;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import com.wultra.security.powerauth.crypto.lib.enums.EcCurve;
+import com.wultra.security.powerauth.crypto.lib.sdk.SdkConfiguration;
+import com.wultra.security.powerauth.crypto.lib.util.KeyConvertor;
+import com.wultra.security.powerauth.crypto.lib.v4.api.PqcDsaKeyConvertor;
+import com.wultra.security.powerauth.crypto.lib.v4.ml.MlDsaKeyConvertor;
+import lombok.extern.slf4j.Slf4j;
 
 import java.security.PublicKey;
+import java.util.Base64;
 import java.util.Optional;
 
 /**
@@ -34,13 +37,13 @@ import java.util.Optional;
  *
  * @author Petr Dvorak, petr@wultra.com
  */
+@Slf4j
 public class BaseService {
-
-    private final static Logger logger = LoggerFactory.getLogger(BaseService.class);
 
     protected final TestConfigRepository appConfigRepository;
 
-    private static final KeyConvertor keyConvertor = new KeyConvertor();
+    private static final KeyConvertor KEY_CONVERTOR_EC = new KeyConvertor();
+    private static final PqcDsaKeyConvertor KEY_CONVERTOR_PQC_DSA = new MlDsaKeyConvertor();
 
     public BaseService(TestConfigRepository appConfigRepository) {
         this.appConfigRepository = appConfigRepository;
@@ -63,18 +66,88 @@ public class BaseService {
     }
 
     /**
-     * Get master public key from test application configuration.
-     * @param appConfig Test application configuration.
+     * Get P-256 master public key from test application configuration.
+     * @param sdkConfig Mobile SDK configuration.
      * @return Master public key.
      * @throws GenericCryptographyException Thrown in case public key conversion fails.
      */
-    protected PublicKey getMasterPublicKey(TestConfigEntity appConfig) throws GenericCryptographyException {
-        final byte[] masterKeyBytes = BaseEncoding.base64().decode(appConfig.getMasterPublicKey());
+    protected PublicKey getMasterPublicKeyP256(final SdkConfiguration sdkConfig) throws GenericCryptographyException {
+        final String masterPublicKeyP256 = sdkConfig.masterPublicKeyP256();
+        if (masterPublicKeyP256 == null) {
+            return null;
+        }
 
+        final byte[] masterKeyBytes = Base64.getDecoder().decode(masterPublicKeyP256);
         try {
-            return keyConvertor.convertBytesToPublicKey(masterKeyBytes);
+            return KEY_CONVERTOR_EC.convertBytesToPublicKey(EcCurve.P256, masterKeyBytes);
         } catch (Exception ex) {
-            logger.warn("Key conversion failed, reason: {}", ex.getMessage());
+            logger.warn("Key conversion failed for P-256 master public key, reason: {}", ex.getMessage());
+            logger.debug(ex.getMessage(), ex);
+            throw new GenericCryptographyException("Key conversion failed");
+        }
+    }
+
+    /**
+     * Get P-384 master public key from test application configuration.
+     * @param sdkConfig Mobile SDK configuration.
+     * @return Master public key.
+     * @throws GenericCryptographyException Thrown in case public key conversion fails.
+     */
+    protected PublicKey getMasterPublicKeyP384(final SdkConfiguration sdkConfig) throws GenericCryptographyException {
+        final String masterPublicKeyP384 = sdkConfig.masterPublicKeyP384();
+        if (masterPublicKeyP384 == null) {
+            return null;
+        }
+
+        final byte[] masterKeyBytes = Base64.getDecoder().decode(masterPublicKeyP384);
+        try {
+            return KEY_CONVERTOR_EC.convertBytesToPublicKey(EcCurve.P384, masterKeyBytes);
+        } catch (Exception ex) {
+            logger.warn("Key conversion failed for P-384 master public key, reason: {}", ex.getMessage());
+            logger.debug(ex.getMessage(), ex);
+            throw new GenericCryptographyException("Key conversion failed");
+        }
+    }
+
+    /**
+     * Get ML-DSA-65 master public key from test application configuration.
+     * @param sdkConfig Mobile SDK configuration.
+     * @return Master public key.
+     * @throws GenericCryptographyException Thrown in case public key conversion fails.
+     */
+    protected PublicKey getMasterPublicKeyMlDsa65(final SdkConfiguration sdkConfig) throws GenericCryptographyException {
+        final String masterPublicKeyMlDsa65 = sdkConfig.masterPublicKeyMlDsa65();
+        if (masterPublicKeyMlDsa65 == null) {
+            return null;
+        }
+
+        final byte[] masterKeyBytes = Base64.getDecoder().decode(masterPublicKeyMlDsa65);
+        try {
+            return KEY_CONVERTOR_PQC_DSA.convertBytesToPublicKey(masterKeyBytes);
+        } catch (Exception ex) {
+            logger.warn("Key conversion failed for ML-DSA-65 master public key, reason: {}", ex.getMessage());
+            logger.debug(ex.getMessage(), ex);
+            throw new GenericCryptographyException("Key conversion failed");
+        }
+    }
+
+    /**
+     * Get ML-DSA-87 master public key from test application configuration.
+     * @param sdkConfig Mobile SDK configuration.
+     * @return Master public key.
+     * @throws GenericCryptographyException Thrown in case public key conversion fails.
+     */
+    protected PublicKey getMasterPublicKeyMlDsa87(final SdkConfiguration sdkConfig) throws GenericCryptographyException {
+        final String masterPublicKeyMlDsa87 = sdkConfig.masterPublicKeyMlDsa87();
+        if (masterPublicKeyMlDsa87 == null) {
+            return null;
+        }
+
+        final byte[] masterKeyBytes = Base64.getDecoder().decode(masterPublicKeyMlDsa87);
+        try {
+            return KEY_CONVERTOR_PQC_DSA.convertBytesToPublicKey(masterKeyBytes);
+        } catch (Exception ex) {
+            logger.warn("Key conversion failed for ML-DSA-87 master public key, reason: {}", ex.getMessage());
             logger.debug(ex.getMessage(), ex);
             throw new GenericCryptographyException("Key conversion failed");
         }

@@ -18,21 +18,24 @@
 package com.wultra.security.powerauth.app.testserver.controller;
 
 import com.wultra.core.rest.client.base.RestClientException;
-import com.wultra.security.powerauth.app.testserver.errorhandling.ActivationFailedException;
-import com.wultra.security.powerauth.app.testserver.errorhandling.AppConfigNotFoundException;
-import com.wultra.security.powerauth.app.testserver.errorhandling.RemoteExecutionException;
-import com.wultra.security.powerauth.app.testserver.errorhandling.SignatureVerificationException;
+import com.wultra.security.powerauth.app.testserver.errorhandling.*;
 import com.wultra.security.powerauth.app.testserver.model.request.GetOperationsRequest;
 import com.wultra.security.powerauth.app.testserver.model.request.OperationApproveInternalRequest;
+import com.wultra.security.powerauth.app.testserver.model.request.OperationRejectInternalRequest;
 import com.wultra.security.powerauth.app.testserver.service.OperationsService;
-import io.getlime.core.rest.model.base.request.ObjectRequest;
-import io.getlime.core.rest.model.base.response.ObjectResponse;
-import io.getlime.core.rest.model.base.response.Response;
-import io.getlime.security.powerauth.lib.mtoken.model.response.OperationListResponse;
+import com.wultra.security.powerauth.lib.mtoken.model.response.OperationListResponse;
+import com.wultra.core.rest.model.base.request.ObjectRequest;
+import com.wultra.core.rest.model.base.response.ObjectResponse;
+import com.wultra.core.rest.model.base.response.Response;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.enums.ParameterIn;
+import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpHeaders;
+import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -41,6 +44,7 @@ import org.springframework.web.bind.annotation.RestController;
  * @author Petr Dvorak, petr@wultra.com
  */
 @RestController
+@Validated
 @RequestMapping("operations")
 public class OperationsController {
 
@@ -63,9 +67,11 @@ public class OperationsController {
      * @throws RestClientException In case REST client call fails (fetching operations).
      * @throws SignatureVerificationException In case signature verification fails.
      * @throws ActivationFailedException In case activation is not found.
+     * @throws GenericCryptographyException In case of a cryptography error.
      */
-    @RequestMapping(value = "pending", method = RequestMethod.POST)
-    public ObjectResponse<OperationListResponse> fetchOperations(@RequestBody ObjectRequest<GetOperationsRequest> request) throws RemoteExecutionException, RestClientException, SignatureVerificationException, ActivationFailedException {
+    @Parameter(name = HttpHeaders.ACCEPT_LANGUAGE, in = ParameterIn.HEADER, allowEmptyValue = true, description = "Preferred language in which we want to get the operations.", example = "en")
+    @PostMapping("pending")
+    public ObjectResponse<OperationListResponse> fetchOperations(@Valid @RequestBody ObjectRequest<GetOperationsRequest> request) throws RemoteExecutionException, RestClientException, SignatureVerificationException, ActivationFailedException, GenericCryptographyException {
         final OperationListResponse response = operationsService.getOperations(request.getRequestObject());
         return new ObjectResponse<>(response);
     }
@@ -78,10 +84,26 @@ public class OperationsController {
      * @throws SignatureVerificationException In case signature verification fails.
      * @throws ActivationFailedException In case activation is not found.
      * @throws AppConfigNotFoundException In case app configuration is not found.
+     * @throws GenericCryptographyException In case of a cryptography error.
      */
-    @RequestMapping(value = "approve", method = RequestMethod.POST)
-    public Response approveOperations(@RequestBody ObjectRequest<OperationApproveInternalRequest> request) throws RemoteExecutionException, AppConfigNotFoundException, SignatureVerificationException, ActivationFailedException {
+    @PostMapping("approve")
+    public Response approveOperations(@Valid @RequestBody ObjectRequest<OperationApproveInternalRequest> request) throws RemoteExecutionException, AppConfigNotFoundException, SignatureVerificationException, ActivationFailedException, GenericCryptographyException {
         return operationsService.approveOperation(request.getRequestObject());
+    }
+
+    /**
+     * Reject operation with given ID and data.
+     * @param request Operation approval request.
+     * @return Response with operation approval result.
+     * @throws RemoteExecutionException In case internal calls fail.
+     * @throws SignatureVerificationException In case signature verification fails.
+     * @throws ActivationFailedException In case activation is not found.
+     * @throws AppConfigNotFoundException In case app configuration is not found.
+     * @throws GenericCryptographyException In case of a cryptography error.
+     */
+    @PostMapping("reject")
+    public Response rejectOperations(@Valid @RequestBody ObjectRequest<OperationRejectInternalRequest> request) throws RemoteExecutionException, AppConfigNotFoundException, SignatureVerificationException, ActivationFailedException, GenericCryptographyException {
+        return operationsService.rejectOperation(request.getRequestObject());
     }
 
 }

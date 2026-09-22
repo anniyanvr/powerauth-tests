@@ -18,15 +18,16 @@
 
 package com.wultra.security.powerauth.app.testserver.database.entity;
 
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
 
-import javax.persistence.Column;
-import javax.persistence.Entity;
-import javax.persistence.Id;
-import javax.persistence.Table;
+import java.io.Serial;
 import java.io.Serializable;
 import java.util.Objects;
 
@@ -43,6 +44,7 @@ import java.util.Objects;
 @Table(name = "pa_test_config")
 public class TestConfigEntity implements Serializable {
 
+    @Serial
     private static final long serialVersionUID = -7771850381097895836L;
 
     @Id
@@ -58,8 +60,11 @@ public class TestConfigEntity implements Serializable {
     @Column(name = "application_secret", nullable = false)
     private String applicationSecret;
 
-    @Column(name = "master_public_key", nullable = false)
+    @Column(name = "master_public_key")
     private String masterPublicKey;
+
+    @Column(name = "mobile_sdk_config", columnDefinition = "TEXT")
+    private String mobileSdkConfig;
 
     @Override
     public boolean equals(Object o) {

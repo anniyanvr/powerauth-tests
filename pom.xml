@@ -1,0 +1,280 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>4.1.1</version>
+        <relativePath /> <!-- lookup parent from repository -->
+    </parent>
+
+    <groupId>com.wultra</groupId>
+    <artifactId>powerauth-backend-tests-parent</artifactId>
+    <version>2.3.0-SNAPSHOT</version>
+    <packaging>pom</packaging>
+
+    <description>Parent pom for backend tests</description>
+
+    <inceptionYear>2018</inceptionYear>
+    <url>https://www.wultra.com</url>
+
+    <organization>
+        <name>Wultra s.r.o.</name>
+        <url>https://wultra.com/</url>
+    </organization>
+
+    <licenses>
+        <license>
+            <name>Apache 2.0</name>
+            <url>http://www.apache.org/licenses/LICENSE-2.0.txt</url>
+        </license>
+    </licenses>
+
+    <developers>
+        <developer>
+            <name>Roman Strobl</name>
+            <email>roman.strobl@wultra.com</email>
+            <roles>
+                <role>developer</role>
+            </roles>
+        </developer>
+    </developers>
+
+    <properties>
+        <enrollment-server.version>2.3.0-SNAPSHOT</enrollment-server.version>
+        <enrollment-server-onboarding.version>2.3.0-SNAPSHOT</enrollment-server-onboarding.version>
+        <powerauth-cmd.version>2.3.0-SNAPSHOT</powerauth-cmd.version>
+        <powerauth-crypto.version>2.3.0-SNAPSHOT</powerauth-crypto.version>
+        <powerauth-restful-integration.version>2.3.0-SNAPSHOT</powerauth-restful-integration.version>
+        <powerauth-server.version>2.3.0-SNAPSHOT</powerauth-server.version>
+        <wultra-core.version>2.3.0-SNAPSHOT</wultra-core.version>
+
+        <springdoc-openapi-starter-webmvc-ui.version>3.0.3</springdoc-openapi-starter-webmvc-ui.version>
+        <logstash.version>9.0</logstash.version>
+        <webauthn4j.version>0.31.10.RELEASE</webauthn4j.version>
+        <central.publishing.plugin.version>0.11.0</central.publishing.plugin.version>
+
+        <maven.deploy.skip>true</maven.deploy.skip>
+        <skipPublishing>true</skipPublishing>
+    </properties>
+
+    <modules>
+        <module>powerauth-backend-tests</module>
+        <module>powerauth-fido2-tests</module>
+        <module>powerauth-load-tests</module>
+        <module>powerauth-test-server</module>
+    </modules>
+
+    <dependencyManagement>
+        <dependencies>
+            <!-- PowerAuth Crypto  -->
+            <dependency>
+                <groupId>com.wultra.security</groupId>
+                <artifactId>powerauth-java-crypto</artifactId>
+                <version>${powerauth-crypto.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>com.wultra.security</groupId>
+                <artifactId>powerauth-java-http</artifactId>
+                <version>${powerauth-crypto.version}</version>
+            </dependency>
+
+            <!-- PowerAuth CMD  -->
+            <dependency>
+                <groupId>com.wultra.security</groupId>
+                <artifactId>powerauth-java-cmd-lib</artifactId>
+                <version>${powerauth-cmd.version}</version>
+            </dependency>
+
+            <!-- PowerAuth Restful Integration  -->
+            <dependency>
+                <groupId>com.wultra.security</groupId>
+                <artifactId>powerauth-restful-model</artifactId>
+                <version>${powerauth-restful-integration.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>com.wultra.security</groupId>
+                <artifactId>powerauth-rest-client-spring</artifactId>
+                <version>${powerauth-restful-integration.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>com.wultra.security</groupId>
+                <artifactId>powerauth-restful-security-spring</artifactId>
+                <version>${powerauth-restful-integration.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>com.wultra.core</groupId>
+                <artifactId>rest-client-base</artifactId>
+                <version>${wultra-core.version}</version>
+            </dependency>
+
+            <!--  Enrollment Server  -->
+            <dependency>
+                <groupId>com.wultra.security</groupId>
+                <artifactId>enrollment-server-api-model</artifactId>
+                <version>${enrollment-server.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>com.wultra.security</groupId>
+                <artifactId>enrollment-server-onboarding-api-model</artifactId>
+                <version>${enrollment-server-onboarding.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>com.wultra.security</groupId>
+                <artifactId>mtoken-model</artifactId>
+                <version>${enrollment-server.version}</version>
+            </dependency>
+
+            <!-- Logging -->
+            <dependency>
+                <groupId>net.logstash.logback</groupId>
+                <artifactId>logstash-logback-encoder</artifactId>
+                <version>${logstash.version}</version>
+            </dependency>
+
+            <!-- Standalone run -->
+            <dependency>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-starter-tomcat</artifactId>
+                <scope>provided</scope>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.tomcat.embed</groupId>
+                <artifactId>tomcat-embed-el</artifactId>
+                <scope>provided</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <dependencies>
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <scope>provided</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <pluginManagement>
+            <plugins>
+                <plugin>
+                    <groupId>org.sonatype.central</groupId>
+                    <artifactId>central-publishing-maven-plugin</artifactId>
+                    <version>${central.publishing.plugin.version}</version>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+        <plugins>
+            <plugin>
+                <groupId>org.cyclonedx</groupId>
+                <artifactId>cyclonedx-maven-plugin</artifactId>
+                <configuration>
+                    <skipNotDeployed>false</skipNotDeployed>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <annotationProcessorPaths>
+                        <path>
+                            <groupId>org.projectlombok</groupId>
+                            <artifactId>lombok</artifactId>
+                        </path>
+                    </annotationProcessorPaths>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+
+    <profiles>
+        <profile>
+            <id>internal-repository</id>
+            <activation>
+                <property>
+                    <name>useInternalRepo</name>
+                    <value>true</value>
+                </property>
+            </activation>
+            <distributionManagement>
+                <repository>
+                    <id>jfrog-central</id>
+                    <name>Wultra Artifactory-releases</name>
+                    <url>https://wultra.jfrog.io/artifactory/internal-maven-repository</url>
+                </repository>
+                <snapshotRepository>
+                    <id>jfrog-central</id>
+                    <name>Wultra Artifactory-snapshots</name>
+                    <url>https://wultra.jfrog.io/artifactory/internal-maven-repository</url>
+                </snapshotRepository>
+            </distributionManagement>
+            <repositories>
+                <repository>
+                    <id>jfrog-central</id>
+                    <name>Wultra Artifactory-releases</name>
+                    <url>https://wultra.jfrog.io/artifactory/internal-maven-repository</url>
+                </repository>
+                <repository>
+                    <id>central-portal-snapshots</id>
+                    <url>https://central.sonatype.com/repository/maven-snapshots/</url>
+                    <releases>
+                        <enabled>false</enabled>
+                    </releases>
+                    <snapshots>
+                        <enabled>true</enabled>
+                    </snapshots>
+                </repository>
+            </repositories>
+        </profile>
+        <profile>
+            <id>public-repository</id>
+            <activation>
+                <property>
+                    <name>!useInternalRepo</name>
+                </property>
+            </activation>
+            <repositories>
+                <repository>
+                    <id>central-portal-snapshots</id>
+                    <url>https://central.sonatype.com/repository/maven-snapshots/</url>
+                    <releases>
+                        <enabled>false</enabled>
+                    </releases>
+                    <snapshots>
+                        <enabled>true</enabled>
+                    </snapshots>
+                </repository>
+            </repositories>
+            <properties>
+                <maven.deploy.skip>true</maven.deploy.skip>
+            </properties>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.sonatype.central</groupId>
+                        <artifactId>central-publishing-maven-plugin</artifactId>
+                        <extensions>true</extensions>
+                        <configuration>
+                            <publishingServerId>${env.server_id}</publishingServerId>
+                            <autoPublish>true</autoPublish>
+                            <waitUntil>published</waitUntil>
+                            <waitMaxTime>${env.wait_max_time}</waitMaxTime>
+                            <skipPublishing>true</skipPublishing>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
+
+</project>

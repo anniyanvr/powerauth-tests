@@ -18,9 +18,8 @@
 
 package com.wultra.security.powerauth.app.testserver.errorhandling;
 
-import io.getlime.core.rest.model.base.response.ErrorResponse;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import com.wultra.core.rest.model.base.response.ErrorResponse;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -33,9 +32,8 @@ import org.springframework.web.bind.annotation.ResponseStatus;
  * @author Roman Strobl, roman.strobl@wultra.com
  */
 @ControllerAdvice
+@Slf4j
 public class DefaultExceptionHandler {
-
-    private final static Logger logger = LoggerFactory.getLogger(DefaultExceptionHandler.class);
 
     /**
      * Default exception handler, for unexpected errors.
@@ -50,15 +48,27 @@ public class DefaultExceptionHandler {
     }
 
     /**
-     * Exception handler for application not found exception.
+     * Exception handler for application configuration not found exception.
      * @param ex Exception.
      * @return Response with error details.
      */
     @ExceptionHandler(AppConfigNotFoundException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
-    public @ResponseBody ErrorResponse handleApplicationNotFoundException(AppConfigNotFoundException ex) {
-        logger.warn("Error occurred during application lookup.", ex);
-        return new ErrorResponse("APPLICATION_NOT_FOUND", "Application was not found.");
+    public @ResponseBody ErrorResponse handleAppConfigNotFoundException(AppConfigNotFoundException ex) {
+        logger.warn("Error occurred during application configuration.", ex);
+        return new ErrorResponse("APP_CONFIG_NOT_FOUND", "Application configuration was not found.");
+    }
+
+    /**
+     * Exception handler for application configuration invalid exception.
+     * @param ex Exception.
+     * @return Response with error details.
+     */
+    @ExceptionHandler(AppConfigInvalidException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public @ResponseBody ErrorResponse handleAppConfigInvalidException(AppConfigInvalidException ex) {
+        logger.warn("Error occurred during application configuration.", ex);
+        return new ErrorResponse("APP_CONFIG_INVALID", "Application configuration is invalid.");
     }
 
     /**

@@ -17,7 +17,14 @@
  */
 package com.wultra.security.powerauth.app.testserver.model.request;
 
+import com.fasterxml.jackson.annotation.JsonSetter;
+import com.fasterxml.jackson.annotation.Nulls;
+import com.wultra.security.powerauth.app.testserver.model.enumeration.AuthenticationCodeType;
+import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
+
+import java.util.Map;
 
 /**
  * Request for approving an operation.
@@ -27,10 +34,30 @@ import lombok.Data;
 @Data
 public class OperationApproveInternalRequest {
 
+    @NotBlank
     private String activationId;
+
+    @NotBlank
     private String applicationId;
+
+    @Schema(defaultValue = "possession_knowledge")
+    @JsonSetter(nulls = Nulls.SKIP)
+    private AuthenticationCodeType signatureType = AuthenticationCodeType.POSSESSION_KNOWLEDGE;
+
+    @Schema(defaultValue = "possession_knowledge")
+    @JsonSetter(nulls = Nulls.SKIP)
+    private AuthenticationCodeType authenticationCodeType = AuthenticationCodeType.POSSESSION_KNOWLEDGE;
+
     private String password;
+
+    @NotBlank
     private String operationId;
+
+    @Schema(description = "Operation data to approve.", example = "A1*A100CZK*Q238400856\\/0300**D20190629*NUtility Bill Payment - 05\\/2019")
+    @NotBlank
     private String operationData;
+
+    @Schema(description = "Optional mobile token data, structure is customer-specific. Could be used, for example, for storing FDS data.")
+    private Map<String, Object> mobileTokenData;
 
 }

@@ -1,0 +1,173 @@
+/*
+ * PowerAuth test and related software components
+ * Copyright (C) 2019 Wultra s.r.o.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as published
+ * by the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ *
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+package com.wultra.security.powerauth.test.v33;
+
+import com.wultra.security.powerauth.client.v3.PowerAuthClient;
+import com.wultra.security.powerauth.configuration.PowerAuthTestConfiguration;
+import com.wultra.security.powerauth.lib.cmd.steps.model.SignAsymmetricStepModel;
+import com.wultra.security.powerauth.test.shared.v3.PowerAuthVaultUnlockShared;
+import com.wultra.security.powerauth.crypto.lib.enums.PowerAuthCodeType;
+import com.wultra.security.powerauth.lib.cmd.consts.PowerAuthVersion;
+import com.wultra.security.powerauth.lib.cmd.logging.ObjectStepLogger;
+import com.wultra.security.powerauth.lib.cmd.steps.model.VaultUnlockStepModel;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.junit.jupiter.SpringExtension;
+
+import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.util.HashMap;
+
+/**
+ * PowerAuth vault unlock tests.
+ *
+ * @author Roman Strobl, roman.strobl@wultra.com
+ */
+@ExtendWith(SpringExtension.class)
+@SpringBootTest(classes = PowerAuthTestConfiguration.class)
+@EnableConfigurationProperties
+class PowerAuthVaultUnlockTest {
+
+    private static final PowerAuthVersion VERSION = PowerAuthVersion.V3_3;
+
+    private PowerAuthTestConfiguration config;
+    private static File dataFile;
+    private PowerAuthClient powerAuthClient;
+    private VaultUnlockStepModel model;
+    private ObjectStepLogger stepLogger;
+
+    @Autowired
+    public void setPowerAuthTestConfiguration(PowerAuthTestConfiguration config) {
+        this.config = config;
+    }
+
+    @Autowired
+    public void setPowerAuthClient(PowerAuthClient powerAuthClient) {
+        this.powerAuthClient = powerAuthClient;
+    }
+
+    @BeforeAll
+    static void setUpBeforeClass() throws IOException {
+        dataFile = File.createTempFile("data", ".txt");
+        FileWriter fw = new FileWriter(dataFile);
+        fw.write("Confidential test message used for testing");
+        fw.close();
+    }
+
+    @BeforeEach
+    void setUp() {
+        model = new VaultUnlockStepModel();
+        model.setApplicationKey(config.getApplicationKey());
+        model.setApplicationSecret(config.getApplicationSecret());
+        model.setHeaders(new HashMap<>());
+        model.setPassword(config.getPassword());
+        model.setResultStatusObject(config.getResultStatusObject(VERSION));
+        model.setStatusFileName(config.getStatusFile(VERSION).getAbsolutePath());
+        model.setAuthenticationCodeType(PowerAuthCodeType.POSSESSION_KNOWLEDGE);
+        model.setUriString(config.getPowerAuthIntegrationUrl());
+        model.setReason("TEST_" + VERSION);
+        model.setVersion(VERSION);
+
+        stepLogger = new ObjectStepLogger(System.out);
+    }
+
+    @Test
+    void vaultUnlockTest() throws Exception {
+        PowerAuthVaultUnlockShared.vaultUnlockTest(model, stepLogger);
+    }
+
+    @Test
+    void vaultUnlockInvalidPasswordTest() throws Exception {
+        PowerAuthVaultUnlockShared.vaultUnlockInvalidPasswordTest(config, model, stepLogger);
+    }
+
+    @Test
+    void vaultUnlockSingleFactorTest() throws Exception {
+        PowerAuthVaultUnlockShared.vaultUnlockSingleFactorTest(config, model, stepLogger);
+    }
+
+    @Test
+    void vaultUnlockBiometryFactorTest() throws Exception {
+        PowerAuthVaultUnlockShared.vaultUnlockBiometryFactorTest(model, stepLogger);
+    }
+
+    @Test
+    void vaultUnlockBlockedActivationTest() throws Exception {
+        PowerAuthVaultUnlockShared.vaultUnlockBlockedActivationTest(powerAuthClient, config, model, VERSION);
+    }
+
+    @Test
+    void vaultUnlockUnsupportedApplicationTest() throws Exception {
+        PowerAuthVaultUnlockShared.vaultUnlockUnsupportedApplicationTest(powerAuthClient, config, model);
+    }
+
+    @Test
+    void vaultUnlockCounterIncrementTest() throws Exception {
+        PowerAuthVaultUnlockShared.vaultUnlockCounterIncrementTest(model, stepLogger, VERSION);
+    }
+
+    @Test
+    void vaultUnlockTooLongReasonTest() throws Exception {
+        PowerAuthVaultUnlockShared.vaultUnlockTooLongReasonTest(config, model, stepLogger);
+    }
+
+    @Test
+    void vaultUnlockAndECDSASignatureValidTest() throws Exception {
+        PowerAuthVaultUnlockShared.vaultUnlockAndECDSASignatureValidTest(powerAuthClient, config, model, stepLogger, VERSION);
+    }
+
+    @Test
+    void vaultUnlockAndECDSASignatureInvalidTest() throws Exception {
+        PowerAuthVaultUnlockShared.vaultUnlockAndECDSASignatureInvalidTest(powerAuthClient, config, model, stepLogger, VERSION);
+    }
+
+    @Test
+    void vaultUnlockAndECDSASignatureInvalidActivationTest() throws Exception {
+        PowerAuthVaultUnlockShared.vaultUnlockAndECDSASignatureInvalidActivationTest(powerAuthClient, config, model, stepLogger, VERSION);
+    }
+
+    @Test
+    void vaultUnlockAndECDSASignatureNonExistentActivationTest() throws Exception {
+        PowerAuthVaultUnlockShared.vaultUnlockAndECDSASignatureNonExistentActivationTest(powerAuthClient, config, model, stepLogger, VERSION);
+    }
+
+    @Test
+    void vaultUnlockDevicePrivateKeyAndSignTest() throws Exception {
+        final SignAsymmetricStepModel model = new SignAsymmetricStepModel();
+        model.setApplicationKey(config.getApplicationKey());
+        model.setApplicationSecret(config.getApplicationSecret());
+        model.setHeaders(new HashMap<>());
+        model.setPassword(config.getPassword());
+        model.setResultStatusObject(config.getResultStatusObject(VERSION));
+        model.setStatusFileName(config.getStatusFile(VERSION).getAbsolutePath());
+        model.setAuthenticationCodeType(PowerAuthCodeType.POSSESSION_KNOWLEDGE);
+        model.setUriString(config.getPowerAuthIntegrationUrl());
+        model.setData(Files.readAllBytes(Paths.get(dataFile.getAbsolutePath())));
+        model.setVersion(VERSION);
+        PowerAuthVaultUnlockShared.vaultUnlockDevicePrivateKeyAndSignTest(config, model, stepLogger, VERSION);
+    }
+
+}

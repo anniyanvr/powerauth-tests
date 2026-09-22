@@ -17,40 +17,43 @@
  */
 package com.wultra.security.powerauth.app.testserver.service;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.wultra.core.rest.client.base.DefaultRestClient;
 import com.wultra.core.rest.client.base.RestClient;
 import com.wultra.core.rest.client.base.RestClientException;
+import com.wultra.core.rest.model.base.request.ObjectRequest;
+import com.wultra.core.rest.model.base.response.ObjectResponse;
+import com.wultra.core.rest.model.base.response.Response;
 import com.wultra.security.powerauth.app.testserver.config.TestServerConfiguration;
 import com.wultra.security.powerauth.app.testserver.database.TestConfigRepository;
 import com.wultra.security.powerauth.app.testserver.database.entity.TestConfigEntity;
-import com.wultra.security.powerauth.app.testserver.errorhandling.ActivationFailedException;
-import com.wultra.security.powerauth.app.testserver.errorhandling.AppConfigNotFoundException;
-import com.wultra.security.powerauth.app.testserver.errorhandling.RemoteExecutionException;
-import com.wultra.security.powerauth.app.testserver.errorhandling.SignatureVerificationException;
+import com.wultra.security.powerauth.app.testserver.errorhandling.*;
+import com.wultra.security.powerauth.app.testserver.model.converter.AuthenticationCodeTypeConverter;
 import com.wultra.security.powerauth.app.testserver.model.request.GetOperationsRequest;
 import com.wultra.security.powerauth.app.testserver.model.request.OperationApproveInternalRequest;
+import com.wultra.security.powerauth.app.testserver.model.request.OperationRejectInternalRequest;
+import com.wultra.security.powerauth.app.testserver.util.PowerAuthVersionService;
 import com.wultra.security.powerauth.app.testserver.util.StepItemLogger;
-import io.getlime.core.rest.model.base.request.ObjectRequest;
-import io.getlime.core.rest.model.base.response.ObjectResponse;
-import io.getlime.core.rest.model.base.response.Response;
-import io.getlime.security.powerauth.crypto.lib.enums.PowerAuthSignatureTypes;
-import io.getlime.security.powerauth.lib.cmd.logging.ObjectStepLogger;
-import io.getlime.security.powerauth.lib.cmd.logging.model.StepItem;
-import io.getlime.security.powerauth.lib.cmd.steps.VerifySignatureStep;
-import io.getlime.security.powerauth.lib.cmd.steps.VerifyTokenStep;
-import io.getlime.security.powerauth.lib.cmd.steps.model.VerifySignatureStepModel;
-import io.getlime.security.powerauth.lib.cmd.steps.model.VerifyTokenStepModel;
-import io.getlime.security.powerauth.lib.mtoken.model.response.OperationListResponse;
-import org.json.simple.JSONObject;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import com.wultra.security.powerauth.crypto.lib.enums.PowerAuthCodeType;
+import com.wultra.security.powerauth.lib.cmd.consts.PowerAuthVersion;
+import com.wultra.security.powerauth.lib.cmd.logging.ObjectStepLogger;
+import com.wultra.security.powerauth.lib.cmd.logging.model.StepItem;
+import com.wultra.security.powerauth.lib.cmd.steps.VerifyAuthenticationStep;
+import com.wultra.security.powerauth.lib.cmd.steps.VerifyTokenStep;
+import com.wultra.security.powerauth.lib.cmd.steps.model.VerifyAuthenticationStepModel;
+import com.wultra.security.powerauth.lib.cmd.steps.model.VerifyTokenStepModel;
+import com.wultra.security.powerauth.lib.cmd.steps.pojo.ResultStatusObject;
+import com.wultra.security.powerauth.lib.mtoken.model.response.OperationListResponse;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
+import org.springframework.util.LinkedMultiValueMap;
+import org.springframework.util.MultiValueMap;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Collections;
@@ -63,29 +66,32 @@ import java.util.Map;
  * @author Petr Dvorak, petr@wultra.com
  */
 @Service
+@Slf4j
 public class OperationsService extends BaseService {
-
-    private final static Logger logger = LoggerFactory.getLogger(OperationsService.class);
 
     private final TestServerConfiguration config;
     private final ResultStatusService resultStatusUtil;
     private final VerifyTokenStep verifyTokenStep;
-    private final VerifySignatureStep verifySignatureStep;
+    private final VerifyAuthenticationStep verifyAuthenticationStep;
+    private final PowerAuthVersionService powerAuthVersionService;
 
     /**
      * Service constructor.
      * @param config Test server configuration.
      * @param resultStatusUtil Result status utilities.
+     * @param appConfigRepository Test application configuration repository.
      * @param verifyTokenStep Step for verifying a token.
-     * @param verifySignatureStep Step for verifying signature.
+     * @param verifyAuthenticationStep Step for verifying signature.
+     * @param powerAuthVersionService PowerAuth version mapping service.
      */
     @Autowired
-    public OperationsService(TestServerConfiguration config, ResultStatusService resultStatusUtil, TestConfigRepository appConfigRepository, VerifyTokenStep verifyTokenStep, VerifySignatureStep verifySignatureStep) {
+    public OperationsService(TestServerConfiguration config, ResultStatusService resultStatusUtil, TestConfigRepository appConfigRepository, VerifyTokenStep verifyTokenStep, VerifyAuthenticationStep verifyAuthenticationStep, PowerAuthVersionService powerAuthVersionService) {
         super(appConfigRepository);
         this.config = config;
         this.resultStatusUtil = resultStatusUtil;
         this.verifyTokenStep = verifyTokenStep;
-        this.verifySignatureStep = verifySignatureStep;
+        this.verifyAuthenticationStep = verifyAuthenticationStep;
+        this.powerAuthVersionService = powerAuthVersionService;
     }
 
 
@@ -97,49 +103,49 @@ public class OperationsService extends BaseService {
      * @throws RestClientException In case REST client call fails (fetching operations).
      * @throws SignatureVerificationException In case signature verification fails.
      * @throws ActivationFailedException In case activation is not found.
+     * @throws GenericCryptographyException In case of a cryptography error.
      */
-    @SuppressWarnings("unchecked")
-    public OperationListResponse getOperations(GetOperationsRequest request) throws RemoteExecutionException, RestClientException, SignatureVerificationException, ActivationFailedException {
-        final JSONObject resultStatusObject = resultStatusUtil.getTestStatus(request.getActivationId());
+    public OperationListResponse getOperations(GetOperationsRequest request) throws RemoteExecutionException, RestClientException, SignatureVerificationException, ActivationFailedException, GenericCryptographyException {
+        final ResultStatusObject resultStatus = resultStatusUtil.getTestStatus(request.getActivationId());
+        final PowerAuthVersion version = powerAuthVersionService.mapVersionToProtocol(resultStatus.getVersion());
 
         final VerifyTokenStepModel model = new VerifyTokenStepModel();
         model.setTokenId(request.getTokenId());
         model.setTokenSecret(request.getTokenSecret());
         model.setDryRun(true);
         model.setHttpMethod("POST");
-        model.setVersion(config.getVersion());
+        model.setVersion(version);
         model.setUriString(config.getEnrollmentServiceUrl());
-        model.setResultStatusObject(resultStatusObject);
+        model.setResultStatus(resultStatus);
 
-        String header = null;
+        final ObjectStepLogger stepLogger;
         try {
-            final ObjectStepLogger stepLogger = new ObjectStepLogger();
+            stepLogger = new ObjectStepLogger();
             verifyTokenStep.execute(stepLogger, model.toMap());
-            for (StepItem item: stepLogger.getItems()) {
-                StepItemLogger.log(logger, item);
-                if ("Sending Request".equals(item.getName())) {
-                    final Map<String, Object> responseMap = (Map<String, Object>) item.getObject();
-                    final Map<String, String> headerMap = (Map<String, String>) responseMap.get("requestHeaders");
-                    header = headerMap.get("X-PowerAuth-Token");
-                }
-            }
+            stepLogger.getItems()
+                    .forEach(item -> StepItemLogger.log(logger, item));
         } catch (Exception ex) {
             logger.warn("Remote execution failed, reason: {}", ex.getMessage());
             logger.debug(ex.getMessage(), ex);
-            throw new RemoteExecutionException("Remote execution failed");
+            throw new RemoteExecutionException("Remote execution failed", ex);
         }
 
-        resultStatusUtil.persistResultStatus(resultStatusObject);
+        resultStatusUtil.persistResultStatus(resultStatus);
 
-        if (header == null) {
-            throw new SignatureVerificationException("Unable to generate token");
-        }
+        final String header = stepLogger.getItems().stream()
+                .filter(item -> "Sending Request".equals(item.name()))
+                .map(item -> (Map<String, Object>) item.object())
+                .map(item -> (Map<String, String>) item.get("requestHeaders"))
+                .map(item -> item.get("X-PowerAuth-Token"))
+                .findAny()
+                .orElseThrow(() -> new SignatureVerificationException("Unable to generate token"));
 
-        final HttpHeaders headers = new HttpHeaders();
+        final MultiValueMap<String, String> headers = new LinkedMultiValueMap<>();
         headers.put("X-PowerAuth-Token", Collections.singletonList(header));
+        headers.add(HttpHeaders.ACCEPT_LANGUAGE, LocaleContextHolder.getLocale().getLanguage());
 
         final RestClient restClient = new DefaultRestClient(config.getEnrollmentServiceUrl());
-        final ResponseEntity<ObjectResponse<OperationListResponse>> responseEntity = restClient.post("/api/auth/token/app/operation/list", null, null, headers, new ParameterizedTypeReference<ObjectResponse<OperationListResponse>>() {});
+        final ResponseEntity<ObjectResponse<OperationListResponse>> responseEntity = restClient.post("/api/auth/token/app/operation/list", null, null, headers, new ParameterizedTypeReference<>() {});
         final ObjectResponse<OperationListResponse> entityBody = responseEntity.getBody();
         if (entityBody == null) {
             throw new SignatureVerificationException("Unable to fetch pending operations");
@@ -155,58 +161,114 @@ public class OperationsService extends BaseService {
      * @throws SignatureVerificationException In case signature verification fails.
      * @throws ActivationFailedException In case activation is not found.
      * @throws AppConfigNotFoundException In case app configuration is not found.
+     * @throws GenericCryptographyException In case of a cryptography error.
      */
-    public Response approveOperation(OperationApproveInternalRequest request) throws RemoteExecutionException, AppConfigNotFoundException, SignatureVerificationException, ActivationFailedException {
+    public Response approveOperation(OperationApproveInternalRequest request) throws RemoteExecutionException, AppConfigNotFoundException, SignatureVerificationException, ActivationFailedException, GenericCryptographyException {
         final String applicationId = request.getApplicationId();
         final TestConfigEntity appConfig = getTestAppConfig(applicationId);
-        final JSONObject resultStatusObject = resultStatusUtil.getTestStatus(request.getActivationId());
+        final ResultStatusObject resultStatus = resultStatusUtil.getTestStatus(request.getActivationId());
+        final PowerAuthVersion version = powerAuthVersionService.mapVersionToProtocol(resultStatus.getVersion());
 
-        final Map<String, String> map = new HashMap<>();
+        final Map<String, Object> map = new HashMap<>();
         map.put("id", request.getOperationId());
         map.put("data", request.getOperationData());
+        map.put("mobileTokenData", request.getMobileTokenData());
 
         final byte[] payload;
         try {
             String payloadString = new ObjectMapper().writeValueAsString(new ObjectRequest<>(map));
             payload = payloadString.getBytes(StandardCharsets.UTF_8);
-        } catch (JsonProcessingException e) {
-            throw new SignatureVerificationException("Unable to serialize data");
+        } catch (JacksonException e) {
+            throw new SignatureVerificationException("Unable to serialize data", e);
         }
 
-        final VerifySignatureStepModel model = new VerifySignatureStepModel();
+        final VerifyAuthenticationStepModel model = new VerifyAuthenticationStepModel();
         model.setData(payload);
         model.setResourceId("/operation/authorize");
         model.setUriString(config.getEnrollmentServiceUrl() + "/api/auth/token/app/operation/authorize");
         model.setHttpMethod("POST");
         model.setApplicationKey(appConfig.getApplicationKey());
         model.setApplicationSecret(appConfig.getApplicationSecret());
+        model.setAuthenticationCodeType(AuthenticationCodeTypeConverter.convert(request.getAuthenticationCodeType() != null
+                ? request.getAuthenticationCodeType()
+                : request.getSignatureType()));
         model.setPassword(request.getPassword());
-        model.setSignatureType(PowerAuthSignatureTypes.POSSESSION_KNOWLEDGE);
-        model.setVersion(config.getVersion());
-        model.setResultStatusObject(resultStatusObject);
+        model.setVersion(version);
+        model.setResultStatus(resultStatus);
 
-        boolean success = false;
-        try {
-            final ObjectStepLogger stepLogger = new ObjectStepLogger();
-            verifySignatureStep.execute(stepLogger, model.toMap());
-            for (StepItem item: stepLogger.getItems()) {
-                StepItemLogger.log(logger, item);
-                if ("Signature verified".equals(item.getName())) {
-                    success = true;
-                }
-            }
-        } catch (Exception ex) {
-            logger.warn("Remote execution failed, reason: {}", ex.getMessage());
-            logger.debug(ex.getMessage(), ex);
-            throw new RemoteExecutionException("Remote execution failed");
-        }
+        verifySignature(model, resultStatus);
 
-        resultStatusUtil.persistResultStatus(resultStatusObject);
-
-        if (!success) {
-            throw new SignatureVerificationException("Signature verification failed");
-        }
         return new Response();
     }
 
+    /**
+     * Service to reject an operation.
+     * @param request Operation approval request.
+     * @return Operation approval response.
+     * @throws RemoteExecutionException In case internal calls fail.
+     * @throws SignatureVerificationException In case signature verification fails.
+     * @throws ActivationFailedException In case activation is not found.
+     * @throws AppConfigNotFoundException In case app configuration is not found.
+     * @throws GenericCryptographyException In case of a cryptography error.
+     */
+    public Response rejectOperation(OperationRejectInternalRequest request) throws AppConfigNotFoundException, ActivationFailedException, SignatureVerificationException, RemoteExecutionException, GenericCryptographyException {
+        final String applicationId = request.getApplicationId();
+        final TestConfigEntity appConfig = getTestAppConfig(applicationId);
+        final ResultStatusObject resultStatus = resultStatusUtil.getTestStatus(request.getActivationId());
+        final PowerAuthVersion version = powerAuthVersionService.mapVersionToProtocol(resultStatus.getVersion());
+
+        final String operationId = request.getOperationId();
+        final String reason = request.getReason();
+
+        final Map<String, String> map = new HashMap<>();
+        map.put("id", operationId);
+        if (reason != null) {
+            map.put("reason", reason);
+        }
+
+        final byte[] payload;
+        try {
+            String payloadString = new ObjectMapper().writeValueAsString(new ObjectRequest<>(map));
+            payload = payloadString.getBytes(StandardCharsets.UTF_8);
+        } catch (JacksonException e) {
+            throw new SignatureVerificationException("Unable to serialize data", e);
+        }
+
+        final VerifyAuthenticationStepModel model = new VerifyAuthenticationStepModel();
+        model.setData(payload);
+        model.setResourceId("/operation/cancel");
+        model.setUriString(config.getEnrollmentServiceUrl() + "/api/auth/token/app/operation/cancel");
+        model.setHttpMethod("POST");
+        model.setApplicationKey(appConfig.getApplicationKey());
+        model.setApplicationSecret(appConfig.getApplicationSecret());
+        model.setAuthenticationCodeType(PowerAuthCodeType.POSSESSION);
+        model.setVersion(version);
+        model.setResultStatus(resultStatus);
+
+        verifySignature(model, resultStatus);
+
+        return new Response();
+    }
+
+    @SuppressWarnings("java:S2201")
+    private void verifySignature(final VerifyAuthenticationStepModel model, final ResultStatusObject resultStatus) throws RemoteExecutionException, SignatureVerificationException {
+        final ObjectStepLogger stepLogger;
+        try {
+            stepLogger = new ObjectStepLogger();
+            verifyAuthenticationStep.execute(stepLogger, model.toMap());
+            stepLogger.getItems()
+                    .forEach(item -> StepItemLogger.log(logger, item));
+        } catch (Exception ex) {
+            logger.debug(ex.getMessage(), ex);
+            throw new RemoteExecutionException("Remote execution failed", ex);
+        }
+
+        resultStatusUtil.persistResultStatus(resultStatus);
+
+        stepLogger.getItems().stream()
+                .map(StepItem::name)
+                .filter("Authentication code verified"::equals)
+                .findAny()
+                .orElseThrow(() -> new SignatureVerificationException("Authentication verification failed"));
+    }
 }

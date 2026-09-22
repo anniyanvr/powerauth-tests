@@ -19,7 +19,7 @@
  */
 package com.wultra.security.powerauth.controller;
 
-import io.getlime.core.rest.model.base.response.Response;
+import com.wultra.core.rest.model.base.response.Response;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -50,10 +50,7 @@ public class CallbackTestController {
     public Response verifyCallback(@RequestBody Map<String, Object> request) {
         String activationId = request.get("activationId").toString();
         int counter = 0;
-        while (true) {
-            if (callbacks.containsKey(activationId)) {
-                break;
-            }
+        while (!callbacks.containsKey(activationId)) {
             counter++;
             try {
                 Thread.sleep(100);

@@ -17,18 +17,12 @@
  */
 package com.wultra.security.powerauth.test.v31;
 
-import com.wultra.security.powerauth.client.PowerAuthClient;
-import com.wultra.security.powerauth.client.model.error.PowerAuthClientException;
-import com.wultra.security.powerauth.client.v3.*;
+import com.wultra.security.powerauth.client.v3.PowerAuthClient;
 import com.wultra.security.powerauth.configuration.PowerAuthTestConfiguration;
-import io.getlime.security.powerauth.crypto.client.activation.PowerAuthClientActivation;
-import io.getlime.security.powerauth.crypto.lib.model.ActivationStatusBlobInfo;
-import io.getlime.security.powerauth.lib.cmd.logging.ObjectStepLogger;
-import io.getlime.security.powerauth.lib.cmd.steps.model.GetStatusStepModel;
-import io.getlime.security.powerauth.lib.cmd.steps.model.PrepareActivationStepModel;
-import io.getlime.security.powerauth.lib.cmd.steps.v3.GetStatusStep;
-import io.getlime.security.powerauth.lib.cmd.steps.v3.PrepareActivationStep;
-import org.json.simple.JSONObject;
+import com.wultra.security.powerauth.test.shared.v3.PowerAuthActivationOtpShared;
+import com.wultra.security.powerauth.lib.cmd.consts.PowerAuthVersion;
+import com.wultra.security.powerauth.lib.cmd.steps.model.GetStatusStepModel;
+import com.wultra.security.powerauth.lib.cmd.steps.model.PrepareActivationStepModel;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -41,14 +35,20 @@ import org.springframework.test.context.junit.jupiter.SpringExtension;
 import java.io.File;
 import java.io.IOException;
 import java.util.HashMap;
-import java.util.Map;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
+/**
+ * PowerAuth activation OTP tests.
+ *
+ * @author Roman Strobl, roman.strobl@wultra.com
+ */
 @ExtendWith(SpringExtension.class)
 @SpringBootTest(classes = PowerAuthTestConfiguration.class)
 @EnableConfigurationProperties
 class PowerAuthActivationOtpTest {
+
+    private static final PowerAuthVersion VERSION = PowerAuthVersion.V3_1;
 
     private PowerAuthClient powerAuthClient;
     private PowerAuthTestConfiguration config;
@@ -58,8 +58,6 @@ class PowerAuthActivationOtpTest {
 
     private final String validOtpValue = "1234-5678";
     private final String invalidOtpValue = "8765-4321";
-
-    private static final PowerAuthClientActivation activation = new PowerAuthClientActivation();
 
     @Autowired
     public void setPowerAuthClient(PowerAuthClient powerAuthClient) {
@@ -74,27 +72,27 @@ class PowerAuthActivationOtpTest {
     @BeforeEach
     void setUp() throws IOException {
         // Create temp status file
-        tempStatusFile = File.createTempFile("pa_status_v31", ".json");
+        tempStatusFile = File.createTempFile("pa_status_" + VERSION, ".json");
 
         // Models shared among tests
         model = new PrepareActivationStepModel();
         model.setActivationName("test v31");
         model.setApplicationKey(config.getApplicationKey());
         model.setApplicationSecret(config.getApplicationSecret());
-        model.setMasterPublicKey(config.getMasterPublicKey());
+        model.setMasterPublicKeyP256(config.getMasterPublicKeyP256());
         model.setHeaders(new HashMap<>());
         model.setPassword(config.getPassword());
         model.setStatusFileName(tempStatusFile.getAbsolutePath());
-        model.setResultStatusObject(config.getResultStatusObjectV31());
+        model.setResultStatusObject(config.getResultStatusObject(VERSION));
         model.setUriString(config.getPowerAuthIntegrationUrl());
-        model.setVersion("3.1");
+        model.setVersion(VERSION);
         model.setDeviceInfo("backend-tests");
 
         statusModel = new GetStatusStepModel();
         statusModel.setHeaders(new HashMap<>());
-        statusModel.setResultStatusObject(config.getResultStatusObjectV31());
+        statusModel.setResultStatusObject(config.getResultStatusObject(VERSION));
         statusModel.setUriString(config.getPowerAuthIntegrationUrl());
-        statusModel.setVersion("3.1");
+        statusModel.setVersion(VERSION);
     }
 
     @AfterEach
@@ -103,438 +101,63 @@ class PowerAuthActivationOtpTest {
     }
 
     @Test
-    void validOtpOnKeysExchangeTest() throws Exception {
-
-        JSONObject resultStatusObject = new JSONObject();
-
-        // Init activation
-        InitActivationRequest initRequest = new InitActivationRequest();
-        initRequest.setApplicationId(config.getApplicationId());
-        initRequest.setUserId(config.getUserV31());
-        initRequest.setMaxFailureCount(5L);
-        initRequest.setActivationOtpValidation(ActivationOtpValidation.ON_KEY_EXCHANGE);
-        initRequest.setActivationOtp(validOtpValue);
-        InitActivationResponse initResponse = powerAuthClient.initActivation(initRequest);
-
-        // Prepare activation
-        model.setActivationCode(initResponse.getActivationCode());
-        model.setResultStatusObject(resultStatusObject);
-        model.setAdditionalActivationOtp(validOtpValue);
-        ObjectStepLogger stepLoggerPrepare = new ObjectStepLogger(System.out);
-        new PrepareActivationStep().execute(stepLoggerPrepare, model.toMap());
-        assertTrue(stepLoggerPrepare.getResult().isSuccess());
-        assertEquals(200, stepLoggerPrepare.getResponse().getStatusCode());
-
-        // Verify activation status
-        GetActivationStatusResponse activationStatusResponse = powerAuthClient.getActivationStatus(initResponse.getActivationId());
-        assertNotNull(activationStatusResponse);
-        assertEquals(ActivationStatus.ACTIVE, activationStatusResponse.getActivationStatus());
-
-        // Verify associated recovery code
-        LookupRecoveryCodesResponse recoveryCodes = powerAuthClient.lookupRecoveryCodes(config.getUserV31(), initResponse.getActivationId(), config.getApplicationId(), null, null);
-        assertEquals(1, recoveryCodes.getRecoveryCodes().size());
-        assertEquals(RecoveryCodeStatus.ACTIVE, recoveryCodes.getRecoveryCodes().get(0).getStatus());
-
-        // Remove activation
-        powerAuthClient.removeActivation(initResponse.getActivationId(), "test");
+    void validOtpOnKeyExchangeTest() throws Exception {
+        PowerAuthActivationOtpShared.validOtpOnKeyExchangeTest(powerAuthClient, config, model, validOtpValue, VERSION);
     }
 
     @Test
-    void invalidOtpOnKeysExchangeTest() throws Exception {
-
-        JSONObject resultStatusObject = new JSONObject();
-
-        // Init activation
-        InitActivationRequest initRequest = new InitActivationRequest();
-        initRequest.setApplicationId(config.getApplicationId());
-        initRequest.setUserId(config.getUserV31());
-        initRequest.setMaxFailureCount(5L);
-        initRequest.setActivationOtpValidation(ActivationOtpValidation.ON_KEY_EXCHANGE);
-        initRequest.setActivationOtp(validOtpValue);
-        InitActivationResponse initResponse = powerAuthClient.initActivation(initRequest);
-
-        for (int iteration = 1; iteration <= 5; iteration++) {
-            final boolean lastIteration = iteration == 5;
-            // Prepare activation
-            model.setActivationCode(initResponse.getActivationCode());
-            model.setResultStatusObject(resultStatusObject);
-            model.setAdditionalActivationOtp(invalidOtpValue);
-            ObjectStepLogger stepLoggerPrepare = new ObjectStepLogger(System.out);
-            new PrepareActivationStep().execute(stepLoggerPrepare, model.toMap());
-            assertFalse(stepLoggerPrepare.getResult().isSuccess());
-            assertEquals(400, stepLoggerPrepare.getResponse().getStatusCode());
-
-            // Verify activation status
-            ActivationStatus expectedActivationStatus = lastIteration ? ActivationStatus.REMOVED : ActivationStatus.CREATED;
-            GetActivationStatusResponse activationStatusResponse = powerAuthClient.getActivationStatus(initResponse.getActivationId());
-            assertNotNull(activationStatusResponse);
-            assertEquals(expectedActivationStatus, activationStatusResponse.getActivationStatus());
-        }
+    void invalidOtpOnKeyExchangeTest() throws Exception {
+        PowerAuthActivationOtpShared.invalidOtpOnKeyExchangeTest(powerAuthClient, config, model, validOtpValue, invalidOtpValue, VERSION);
     }
 
     @Test
     void validOtpOnCommitTest() throws Exception {
-
-        JSONObject resultStatusObject = new JSONObject();
-
-        // Init activation
-        InitActivationRequest initRequest = new InitActivationRequest();
-        initRequest.setApplicationId(config.getApplicationId());
-        initRequest.setUserId(config.getUserV31());
-        initRequest.setMaxFailureCount(5L);
-        initRequest.setActivationOtpValidation(ActivationOtpValidation.ON_COMMIT);
-        initRequest.setActivationOtp(validOtpValue);
-        InitActivationResponse initResponse = powerAuthClient.initActivation(initRequest);
-
-        // Prepare activation
-        model.setActivationCode(initResponse.getActivationCode());
-        model.setResultStatusObject(resultStatusObject);
-        ObjectStepLogger stepLoggerPrepare = new ObjectStepLogger(System.out);
-        new PrepareActivationStep().execute(stepLoggerPrepare, model.toMap());
-        assertTrue(stepLoggerPrepare.getResult().isSuccess());
-        assertEquals(200, stepLoggerPrepare.getResponse().getStatusCode());
-
-        // Verify activation status
-        GetActivationStatusResponse activationStatusResponse = powerAuthClient.getActivationStatus(initResponse.getActivationId());
-        assertNotNull(activationStatusResponse);
-        assertEquals(ActivationStatus.PENDING_COMMIT, activationStatusResponse.getActivationStatus());
-
-        // Try commit activation with wrong OTP. Last attempt is valid.
-        for (int iteration = 1; iteration <= 5; iteration++) {
-            boolean lastIteration = iteration == 5;
-            CommitActivationRequest commitRequest = new CommitActivationRequest();
-            commitRequest.setActivationId(initResponse.getActivationId());
-            commitRequest.setActivationOtp(lastIteration ? validOtpValue : invalidOtpValue);
-
-            boolean isActivated;
-            try {
-                CommitActivationResponse commitResponse = powerAuthClient.commitActivation(commitRequest);
-                isActivated = commitResponse.isActivated();
-            } catch (Throwable t) {
-                isActivated = false;
-            }
-            assertEquals(lastIteration, isActivated);
-
-            // Verify activation status
-            activationStatusResponse = powerAuthClient.getActivationStatus(initResponse.getActivationId());
-            assertEquals(lastIteration ? ActivationStatus.ACTIVE : ActivationStatus.PENDING_COMMIT, activationStatusResponse.getActivationStatus());
-        }
-
-        // Remove activation
-        powerAuthClient.removeActivation(initResponse.getActivationId(), "test");
+        PowerAuthActivationOtpShared.validOtpOnCommitTest(powerAuthClient, config, model, validOtpValue, invalidOtpValue, VERSION);
     }
-
 
     @Test
     void invalidOtpOnCommitTest() throws Exception {
-
-        JSONObject resultStatusObject = new JSONObject();
-
-        // Init activation
-        InitActivationRequest initRequest = new InitActivationRequest();
-        initRequest.setApplicationId(config.getApplicationId());
-        initRequest.setUserId(config.getUserV31());
-        initRequest.setMaxFailureCount(5L);
-        initRequest.setActivationOtpValidation(ActivationOtpValidation.ON_COMMIT);
-        initRequest.setActivationOtp(validOtpValue);
-        InitActivationResponse initResponse = powerAuthClient.initActivation(initRequest);
-
-        // Prepare activation
-        model.setActivationCode(initResponse.getActivationCode());
-        model.setResultStatusObject(resultStatusObject);
-        ObjectStepLogger stepLoggerPrepare = new ObjectStepLogger(System.out);
-        new PrepareActivationStep().execute(stepLoggerPrepare, model.toMap());
-        assertTrue(stepLoggerPrepare.getResult().isSuccess());
-        assertEquals(200, stepLoggerPrepare.getResponse().getStatusCode());
-
-        // Verify activation status
-        GetActivationStatusResponse activationStatusResponse = powerAuthClient.getActivationStatus(initResponse.getActivationId());
-        assertNotNull(activationStatusResponse);
-        assertEquals(ActivationStatus.PENDING_COMMIT, activationStatusResponse.getActivationStatus());
-
-        // Try commit activation with wrong OTP. Last attempt is valid.
-        for (int iteration = 1; iteration <= 5; iteration++) {
-            boolean lastIteration = iteration == 5;
-            CommitActivationRequest commitRequest = new CommitActivationRequest();
-            commitRequest.setActivationId(initResponse.getActivationId());
-            commitRequest.setActivationOtp(invalidOtpValue);
-
-            boolean isActivated;
-            try {
-                CommitActivationResponse commitResponse = powerAuthClient.commitActivation(commitRequest);
-                isActivated = commitResponse.isActivated();
-            } catch (Throwable t) {
-                isActivated = false;
-            }
-            assertFalse(isActivated);
-
-            // Verify activation status
-            ActivationStatus expectedActivationStatus = lastIteration ? ActivationStatus.REMOVED : ActivationStatus.PENDING_COMMIT;
-            activationStatusResponse = powerAuthClient.getActivationStatus(initResponse.getActivationId());
-            assertEquals(expectedActivationStatus, activationStatusResponse.getActivationStatus());
-        }
+        PowerAuthActivationOtpShared.invalidOtpOnCommitTest(powerAuthClient, config, model, validOtpValue, invalidOtpValue, VERSION);
     }
 
     @Test
     void updateValidOtpOnCommitTest() throws Exception {
-
-        JSONObject resultStatusObject = new JSONObject();
-
-        // Init activation
-        InitActivationRequest initRequest = new InitActivationRequest();
-        initRequest.setApplicationId(config.getApplicationId());
-        initRequest.setUserId(config.getUserV31());
-        initRequest.setMaxFailureCount(5L);
-        InitActivationResponse initResponse = powerAuthClient.initActivation(initRequest);
-
-        // Prepare activation
-        model.setActivationCode(initResponse.getActivationCode());
-        model.setResultStatusObject(resultStatusObject);
-        ObjectStepLogger stepLoggerPrepare = new ObjectStepLogger(System.out);
-        new PrepareActivationStep().execute(stepLoggerPrepare, model.toMap());
-        assertTrue(stepLoggerPrepare.getResult().isSuccess());
-        assertEquals(200, stepLoggerPrepare.getResponse().getStatusCode());
-
-        // Verify activation status
-        GetActivationStatusResponse activationStatusResponse = powerAuthClient.getActivationStatus(initResponse.getActivationId());
-        assertEquals(ActivationStatus.PENDING_COMMIT, activationStatusResponse.getActivationStatus());
-
-        // Update OTP
-        powerAuthClient.updateActivationOtp(initResponse.getActivationId(), null, validOtpValue);
-
-        // Try commit activation with wrong OTP. Last attempt is valid.
-        for (int iteration = 1; iteration <= 5; iteration++) {
-            boolean lastIteration = iteration == 5;
-            boolean isActivated;
-            try {
-                CommitActivationRequest commitRequest = new CommitActivationRequest();
-                commitRequest.setActivationId(initResponse.getActivationId());
-                commitRequest.setActivationOtp(lastIteration ? validOtpValue : invalidOtpValue);
-                CommitActivationResponse commitResponse = powerAuthClient.commitActivation(commitRequest);
-                isActivated = commitResponse.isActivated();
-            } catch (Throwable t) {
-                isActivated = false;
-            }
-            assertEquals(lastIteration, isActivated);
-
-            // Verify activation status
-            ActivationStatus expectedActivationStatus = lastIteration ? ActivationStatus.ACTIVE : ActivationStatus.PENDING_COMMIT;
-            activationStatusResponse = powerAuthClient.getActivationStatus(initResponse.getActivationId());
-            assertEquals(expectedActivationStatus, activationStatusResponse.getActivationStatus());
-        }
-
-        // Try to get activation status via RESTful API
-        ObjectStepLogger stepLoggerStatus = new ObjectStepLogger(System.out);
-        statusModel.setResultStatusObject(resultStatusObject);
-        new GetStatusStep().execute(stepLoggerStatus, statusModel.toMap());
-        assertTrue(stepLoggerStatus.getResult().isSuccess());
-        assertEquals(200, stepLoggerStatus.getResponse().getStatusCode());
-
-        // Validate failed and max failed attempts.
-        Map<String, Object> statusResponseMap = (Map<String, Object>) stepLoggerStatus.getFirstItem("activation-status-obtained").getObject();
-        ActivationStatusBlobInfo statusBlobInfo = (ActivationStatusBlobInfo) statusResponseMap.get("statusBlob");
-        assertEquals(5L, statusBlobInfo.getMaxFailedAttempts());
-        assertEquals(0L, statusBlobInfo.getFailedAttempts());
-
-        // Remove activation
-        powerAuthClient.removeActivation(initResponse.getActivationId(), "test");
+        PowerAuthActivationOtpShared.updateValidOtpOnCommitTest(powerAuthClient, config, model, statusModel, validOtpValue, invalidOtpValue, VERSION);
     }
 
     @Test
     void updateInvalidOtpOnCommitTest() throws Exception {
-
-        JSONObject resultStatusObject = new JSONObject();
-
-        // Init activation
-        InitActivationRequest initRequest = new InitActivationRequest();
-        initRequest.setApplicationId(config.getApplicationId());
-        initRequest.setUserId(config.getUserV31());
-        initRequest.setMaxFailureCount(5L);
-        InitActivationResponse initResponse = powerAuthClient.initActivation(initRequest);
-
-        // Prepare activation
-        model.setActivationCode(initResponse.getActivationCode());
-        model.setResultStatusObject(resultStatusObject);
-        ObjectStepLogger stepLoggerPrepare = new ObjectStepLogger(System.out);
-        new PrepareActivationStep().execute(stepLoggerPrepare, model.toMap());
-        assertTrue(stepLoggerPrepare.getResult().isSuccess());
-        assertEquals(200, stepLoggerPrepare.getResponse().getStatusCode());
-
-        // Verify activation status
-        GetActivationStatusResponse activationStatusResponse = powerAuthClient.getActivationStatus(initResponse.getActivationId());
-        assertEquals(ActivationStatus.PENDING_COMMIT, activationStatusResponse.getActivationStatus());
-
-        // Update OTP
-        powerAuthClient.updateActivationOtp(initResponse.getActivationId(), null, validOtpValue);
-
-        // Try commit activation with wrong OTP. Last attempt is valid.
-        for (int iteration = 1; iteration <= 5; iteration++) {
-            boolean lastIteration = iteration == 5;
-            boolean isActivated;
-            try {
-                CommitActivationRequest commitRequest = new CommitActivationRequest();
-                commitRequest.setActivationId(initResponse.getActivationId());
-                commitRequest.setActivationOtp(invalidOtpValue);
-                CommitActivationResponse commitResponse = powerAuthClient.commitActivation(commitRequest);
-                isActivated = commitResponse.isActivated();
-            } catch (Throwable t) {
-                isActivated = false;
-            }
-            assertFalse(isActivated);
-
-            // Verify activation status
-            ActivationStatus expectedActivationStatus = lastIteration ? ActivationStatus.REMOVED : ActivationStatus.PENDING_COMMIT;
-            activationStatusResponse = powerAuthClient.getActivationStatus(initResponse.getActivationId());
-            assertEquals(expectedActivationStatus, activationStatusResponse.getActivationStatus());
-        }
+        PowerAuthActivationOtpShared.updateInvalidOtpOnCommitTest(powerAuthClient, config, model, validOtpValue, invalidOtpValue, VERSION);
     }
 
     @Test
     void wrongActivationInitParamTest1() {
-        assertThrows(PowerAuthClientException.class, () -> {
-            // Init activation
-            InitActivationRequest initRequest = new InitActivationRequest();
-            initRequest.setApplicationId(config.getApplicationId());
-            initRequest.setUserId(config.getUserV31());
-            initRequest.setMaxFailureCount(5L);
-            // Set ON_KEY_EXCHANGE but no OTP
-            initRequest.setActivationOtpValidation(ActivationOtpValidation.ON_KEY_EXCHANGE);
-            powerAuthClient.initActivation(initRequest);
-        });
+        PowerAuthActivationOtpShared.wrongActivationInitParamTest1(powerAuthClient, config, VERSION);
     }
 
     @Test
     void wrongActivationInitParamTest2() {
-        assertThrows(PowerAuthClientException.class, () -> {
-            // Init activation
-            InitActivationRequest initRequest = new InitActivationRequest();
-            initRequest.setApplicationId(config.getApplicationId());
-            initRequest.setUserId(config.getUserV31());
-            initRequest.setMaxFailureCount(5L);
-            // Set ON_COMMIT but no OTP
-            initRequest.setActivationOtpValidation(ActivationOtpValidation.ON_COMMIT);
-            powerAuthClient.initActivation(initRequest);
-        });
+        PowerAuthActivationOtpShared.wrongActivationInitParamTest2(powerAuthClient, config, VERSION);
     }
 
     @Test
     void wrongActivationInitParamTest3() {
-        assertThrows(PowerAuthClientException.class, () -> {
-            // Init activation
-            InitActivationRequest initRequest = new InitActivationRequest();
-            initRequest.setApplicationId(config.getApplicationId());
-            initRequest.setUserId(config.getUserV31());
-            initRequest.setMaxFailureCount(5L);
-            // Set OTP with no validation specified
-            initRequest.setActivationOtp(validOtpValue);
-            powerAuthClient.initActivation(initRequest);
-        });
+        PowerAuthActivationOtpShared.wrongActivationInitParamTest3(powerAuthClient, config, VERSION);
     }
 
     @Test
     void wrongActivationInitParamTest4() {
-        assertThrows(PowerAuthClientException.class, () -> {
-            // Init activation
-            InitActivationRequest initRequest = new InitActivationRequest();
-            initRequest.setApplicationId(config.getApplicationId());
-            initRequest.setUserId(config.getUserV31());
-            initRequest.setMaxFailureCount(5L);
-            // Set ON_KEY_EXCHANGE but empty OTP
-            initRequest.setActivationOtpValidation(ActivationOtpValidation.ON_KEY_EXCHANGE);
-            initRequest.setActivationOtp("");
-            powerAuthClient.initActivation(initRequest);
-        });
-    }
-
-    @Test
-    void wrongActivationInitParamTest5() {
-        assertThrows(PowerAuthClientException.class, () -> {
-            // Init activation
-            InitActivationRequest initRequest = new InitActivationRequest();
-            initRequest.setApplicationId(config.getApplicationId());
-            initRequest.setUserId(config.getUserV31());
-            initRequest.setMaxFailureCount(5L);
-            // Set ON_COMMIT but empty OTP
-            initRequest.setActivationOtpValidation(ActivationOtpValidation.ON_COMMIT);
-            initRequest.setActivationOtp("");
-            powerAuthClient.initActivation(initRequest);
-        });
+        PowerAuthActivationOtpShared.wrongActivationInitParamTest4(powerAuthClient, config, VERSION);
     }
 
     @Test
     void missingOtpOnCommitTest() throws Exception {
-
-        JSONObject resultStatusObject = new JSONObject();
-
-        // Init activation
-        InitActivationRequest initRequest = new InitActivationRequest();
-        initRequest.setApplicationId(config.getApplicationId());
-        initRequest.setUserId(config.getUserV31());
-        initRequest.setMaxFailureCount(5L);
-        initRequest.setActivationOtpValidation(ActivationOtpValidation.ON_COMMIT);
-        initRequest.setActivationOtp(validOtpValue);
-        InitActivationResponse initResponse = powerAuthClient.initActivation(initRequest);
-
-        // Prepare activation
-        model.setActivationCode(initResponse.getActivationCode());
-        model.setResultStatusObject(resultStatusObject);
-        ObjectStepLogger stepLoggerPrepare = new ObjectStepLogger(System.out);
-        new PrepareActivationStep().execute(stepLoggerPrepare, model.toMap());
-        assertTrue(stepLoggerPrepare.getResult().isSuccess());
-        assertEquals(200, stepLoggerPrepare.getResponse().getStatusCode());
-
-        // Verify activation status
-        GetActivationStatusResponse activationStatusResponse = powerAuthClient.getActivationStatus(initResponse.getActivationId());
-        assertEquals(ActivationStatus.PENDING_COMMIT, activationStatusResponse.getActivationStatus());
-
-        // Try commit with no OTP for more than max failed attempts. Use OTP in the last iteration, that should pass.
-        for (int iteration = 1; iteration <= 6; iteration++) {
-            boolean lastIteration = iteration == 6;
-            boolean isActivated;
-            try {
-                CommitActivationRequest commitRequest = new CommitActivationRequest();
-                commitRequest.setActivationId(initResponse.getActivationId());
-                if (lastIteration) {
-                    commitRequest.setActivationOtp(validOtpValue);
-                }
-                CommitActivationResponse commitResponse = powerAuthClient.commitActivation(commitRequest);
-                isActivated = commitResponse.isActivated();
-            } catch (Throwable t) {
-                isActivated = false;
-            }
-            assertEquals(lastIteration, isActivated);
-
-            // Verify activation status again
-            ActivationStatus expectedActivationStatus = lastIteration ? ActivationStatus.ACTIVE : ActivationStatus.PENDING_COMMIT;
-            activationStatusResponse = powerAuthClient.getActivationStatus(initResponse.getActivationId());
-            assertEquals(expectedActivationStatus, activationStatusResponse.getActivationStatus());
-        }
-
-        // Remove activation
-        powerAuthClient.removeActivation(initResponse.getActivationId(), "test");
+        PowerAuthActivationOtpShared.missingOtpOnCommitTest(powerAuthClient, config, model, validOtpValue, VERSION);
     }
 
     @Test
-    void missingOtpOnKeysExchangeTest() throws Exception {
-
-        JSONObject resultStatusObject = new JSONObject();
-
-        // Init activation
-        InitActivationRequest initRequest = new InitActivationRequest();
-        initRequest.setApplicationId(config.getApplicationId());
-        initRequest.setUserId(config.getUserV31());
-        initRequest.setMaxFailureCount(5L);
-        initRequest.setActivationOtpValidation(ActivationOtpValidation.ON_KEY_EXCHANGE);
-        initRequest.setActivationOtp(validOtpValue);
-        InitActivationResponse initResponse = powerAuthClient.initActivation(initRequest);
-
-        // Prepare activation
-        model.setActivationCode(initResponse.getActivationCode());
-        model.setResultStatusObject(resultStatusObject);
-        model.setAdditionalActivationOtp(null);
-        ObjectStepLogger stepLoggerPrepare = new ObjectStepLogger(System.out);
-        new PrepareActivationStep().execute(stepLoggerPrepare, model.toMap());
-        assertFalse(stepLoggerPrepare.getResult().isSuccess());
-        assertEquals(400, stepLoggerPrepare.getResponse().getStatusCode());
+    void missingOtpOnKeyExchangeTest() throws Exception {
+        PowerAuthActivationOtpShared.missingOtpOnKeyExchangeTest(powerAuthClient, config, model, validOtpValue, VERSION);
     }
+
 }

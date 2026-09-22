@@ -15,9 +15,10 @@
  */
 package com.wultra.security.powerauth.test
 
-import io.getlime.security.powerauth.lib.cmd.consts.PowerAuthVersion
-import io.getlime.security.powerauth.lib.cmd.logging.{ObjectStepLogger, StepLogger}
-import io.getlime.security.powerauth.lib.cmd.util.ConfigurationUtil
+import com.wultra.security.powerauth.lib.cmd.consts.PowerAuthVersion
+import com.wultra.security.powerauth.lib.cmd.logging.{ObjectStepLogger, StepLogger}
+import com.wultra.security.powerauth.lib.cmd.util.ConfigurationUtil
+import com.wultra.security.powerauth.crypto.lib.sdk.{SdkConfiguration, SdkConfigurationSerializer}
 import org.json.simple.{JSONObject, JSONValue}
 
 import java.nio.charset.StandardCharsets
@@ -52,8 +53,10 @@ object ClientConfig {
 
   val applicationSecret: String = ConfigurationUtil.getApplicationSecret(clientConfigObject)
 
-  val masterPublicKey: ECPublicKey = ConfigurationUtil.getMasterKey(clientConfigObject, stepLogger).asInstanceOf[ECPublicKey]
+  val mobileSdkConfig: SdkConfiguration = SdkConfigurationSerializer.deserialize(ConfigurationUtil.getMobileSdkConfig(clientConfigObject))
 
-  val modelVersion: PowerAuthVersion = PowerAuthVersion.V3_1
+  val masterPublicKey: ECPublicKey = mobileSdkConfig.masterPublicKeyP256().asInstanceOf[ECPublicKey]
+
+  val modelVersion: PowerAuthVersion = PowerAuthVersion.V3_3
 
 }

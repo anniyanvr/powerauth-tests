@@ -26,13 +26,11 @@ import com.wultra.security.powerauth.app.testserver.model.response.ComputeTokenD
 import com.wultra.security.powerauth.app.testserver.model.request.CreateTokenRequest;
 import com.wultra.security.powerauth.app.testserver.model.response.CreateTokenResponse;
 import com.wultra.security.powerauth.app.testserver.service.TokenService;
-import io.getlime.core.rest.model.base.request.ObjectRequest;
-import io.getlime.core.rest.model.base.response.ObjectResponse;
+import com.wultra.core.rest.model.base.request.ObjectRequest;
+import com.wultra.core.rest.model.base.response.ObjectResponse;
+import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestMethod;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 /**
  * Controller for token related services.
@@ -58,13 +56,13 @@ public class TokenController {
      * Call to create a new token.
      * @param request Request for creating a new token.
      * @return Response with token ID and secret.
-     * @throws GenericCryptographyException In case a crypto provider is not initialized properly.
+     * @throws GenericCryptographyException In case of a cryptography error.
      * @throws RemoteExecutionException In case remote communication fails.
      * @throws AppConfigNotFoundException In case app configuration is incorrect.
      * @throws ActivationFailedException In case activation is not found.
      */
-    @RequestMapping(value = "create", method = RequestMethod.POST)
-    public ObjectResponse<CreateTokenResponse> createToken(@RequestBody ObjectRequest<CreateTokenRequest> request) throws GenericCryptographyException, RemoteExecutionException, AppConfigNotFoundException, ActivationFailedException {
+    @PostMapping("create")
+    public ObjectResponse<CreateTokenResponse> createToken(@Valid @RequestBody ObjectRequest<CreateTokenRequest> request) throws GenericCryptographyException, RemoteExecutionException, AppConfigNotFoundException, ActivationFailedException {
         final CreateTokenResponse response = tokenService.createToken(request.getRequestObject());
         return new ObjectResponse<>(response);
     }
@@ -75,9 +73,10 @@ public class TokenController {
      * @return Compute token digest response.
      * @throws RemoteExecutionException In case remote communication fails.
      * @throws ActivationFailedException In case activation is not found.
+     * @throws GenericCryptographyException In case of a cryptography error.
      */
-    @RequestMapping(value = "compute-digest", method = RequestMethod.POST)
-    public ObjectResponse<ComputeTokenDigestResponse> computeTokenDigest(@RequestBody ObjectRequest<ComputeTokenDigestRequest> request) throws RemoteExecutionException, ActivationFailedException {
+    @PostMapping("compute-digest")
+    public ObjectResponse<ComputeTokenDigestResponse> computeTokenDigest(@Valid@RequestBody ObjectRequest<ComputeTokenDigestRequest> request) throws RemoteExecutionException, ActivationFailedException, GenericCryptographyException {
         final ComputeTokenDigestResponse response = tokenService.computeTokenDigest(request.getRequestObject());
         return new ObjectResponse<>(response);
     }

@@ -18,6 +18,8 @@
 
 package com.wultra.security.powerauth.app.testserver.errorhandling;
 
+import java.io.Serial;
+
 /**
  * Exception for case when remote execution fails.
  *
@@ -25,6 +27,7 @@ package com.wultra.security.powerauth.app.testserver.errorhandling;
  */
 public class RemoteExecutionException extends Exception {
 
+    @Serial
     private static final long serialVersionUID = 4520301398113031036L;
 
     /**
@@ -39,6 +42,15 @@ public class RemoteExecutionException extends Exception {
      */
     public RemoteExecutionException(String message) {
         super(message);
+    }
+
+    /**
+     * Constructor with error message and cause.
+     * @param message Error message.
+     * @param cause Error cause.
+     */
+    public RemoteExecutionException(String message, Throwable cause) {
+        super(message, cause);
     }
 
 }

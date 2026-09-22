@@ -21,10 +21,18 @@ package com.wultra.security.powerauth.app.testserver.service;
 import com.wultra.security.powerauth.app.testserver.database.TestStatusRepository;
 import com.wultra.security.powerauth.app.testserver.database.entity.TestStatusEntity;
 import com.wultra.security.powerauth.app.testserver.errorhandling.ActivationFailedException;
-import org.json.simple.JSONObject;
+import com.wultra.security.powerauth.app.testserver.errorhandling.GenericCryptographyException;
+import com.wultra.security.powerauth.crypto.lib.generator.HashBasedCounter;
+import com.wultra.security.powerauth.crypto.lib.model.exception.CryptoProviderException;
+import com.wultra.security.powerauth.crypto.lib.model.exception.GenericCryptoException;
+import com.wultra.security.powerauth.lib.cmd.consts.PowerAuthVersion;
+import com.wultra.security.powerauth.lib.cmd.steps.pojo.ResultStatusObject;
+import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.ObjectUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.util.Base64;
 import java.util.Optional;
 
 /**
@@ -33,6 +41,7 @@ import java.util.Optional;
  * @author Roman Strobl, roman.strobl@wultra.com
  */
 @Service
+@Slf4j
 public class ResultStatusService {
 
     private final TestStatusRepository appStatusRepository;
@@ -48,33 +57,57 @@ public class ResultStatusService {
 
     /**
      * Utility method for persisting results status object to database.
-     * @param resultStatusObject Result status object.
+     * @param resultStatus Result status object.
      */
-    public void persistResultStatus(JSONObject resultStatusObject) {
-        final String activationId = getStringValue(resultStatusObject, "activationId");
+    public void persistResultStatus(ResultStatusObject resultStatus) {
+
+        final String activationId = resultStatus.getActivationId();
         final Optional<TestStatusEntity> statusOptional = appStatusRepository.findById(activationId);
         final TestStatusEntity statusEntity = statusOptional.orElseGet(TestStatusEntity::new);
 
-        final String serverPublicKey = getStringValue(resultStatusObject, "serverPublicKey");
-        final Long counter = getLongValue(resultStatusObject, "counter");
-        final String ctrData = getStringValue(resultStatusObject, "ctrData");
-        final String encryptedDevicePrivateKey = getStringValue(resultStatusObject, "encryptedDevicePrivateKey");
-        final String signatureBiometryKey = getStringValue(resultStatusObject, "signatureBiometryKey");
-        final String signatureKnowledgeKeyEncrypted = getStringValue(resultStatusObject, "signatureKnowledgeKeyEncrypted");
-        final String signatureKnowledgeKeySalt = getStringValue(resultStatusObject, "signatureKnowledgeKeySalt");
-        final String signaturePossessionKey = getStringValue(resultStatusObject, "signaturePossessionKey");
-        final String transportMasterKey = getStringValue(resultStatusObject, "transportMasterKey");
+        final String ecServerPublicKey = resultStatus.getEcServerPublicKey();
+        final String pqcServerPublicKey = resultStatus.getPqcServerPublicKey();
+        final String ecDevicePublicKey = resultStatus.getEcDevicePublicKey();
+        final String pqcDevicePublicKey = resultStatus.getPqcDevicePublicKey();
+        final Long counter = resultStatus.getCounter();
+        final String ctrData = resultStatus.getCtrData();
+        final String encryptedEcDevicePrivateKey = resultStatus.getEncryptedEcDevicePrivateKey();
+        final String encryptedPqcDevicePrivateKey = resultStatus.getEncryptedPqcDevicePrivateKey();
+        final String biometryFactorKey = resultStatus.getBiometryFactorKey();
+        final String knowledgeFactorKeyEncrypted = resultStatus.getKnowledgeFactorKeyEncrypted();
+        final String knowledgeFactorKeySalt = resultStatus.getKnowledgeFactorKeySalt();
+        final String possessionFactorKey = resultStatus.getPossessionFactorKey();
+        final String sharedSecretAlgorithm = resultStatus.getSharedSecretAlgorithm();
+        final String temporaryKeyActSignRequestKey = resultStatus.getTemporaryKeyActSignRequestKey();
+        final String sharedInfo2Key = resultStatus.getSharedInfo2Key();
+        final String macPersonalizedDataKey = resultStatus.getMacPersonalizedDataKey();
+        final String statusBlobMacKey = resultStatus.getStatusBlobMacKey();
+        final String transportMasterKey = resultStatus.getTransportMasterKey();
+        final Long version = resultStatus.getVersion();
 
         statusEntity.setActivationId(activationId);
-        statusEntity.setServerPublicKey(serverPublicKey);
+        statusEntity.setEcServerPublicKey(ecServerPublicKey);
+        statusEntity.setPqcServerPublicKey(pqcServerPublicKey);
+        statusEntity.setEcDevicePublicKey(ecDevicePublicKey);
+        statusEntity.setPqcDevicePublicKey(pqcDevicePublicKey);
         statusEntity.setCounter(counter);
         statusEntity.setCtrData(ctrData);
-        statusEntity.setEncryptedDevicePrivateKey(encryptedDevicePrivateKey);
-        statusEntity.setSignatureBiometryKey(signatureBiometryKey);
-        statusEntity.setSignatureKnowledgeKeyEncrypted(signatureKnowledgeKeyEncrypted);
-        statusEntity.setSignatureKnowledgeKeySalt(signatureKnowledgeKeySalt);
-        statusEntity.setSignaturePossessionKey(signaturePossessionKey);
-        statusEntity.setTransportMasterKey(transportMasterKey);
+        statusEntity.setEncryptedEcDevicePrivateKey(encryptedEcDevicePrivateKey);
+        statusEntity.setEncryptedPqcDevicePrivateKey(encryptedPqcDevicePrivateKey);
+        statusEntity.setBiometryFactorKey(biometryFactorKey);
+        statusEntity.setKnowledgeFactorKeyEncrypted(knowledgeFactorKeyEncrypted);
+        statusEntity.setKnowledgeFactorKeySalt(knowledgeFactorKeySalt);
+        statusEntity.setPossessionFactorKey(possessionFactorKey);
+        statusEntity.setSharedSecretAlgorithm(sharedSecretAlgorithm);
+        statusEntity.setTemporaryKeyActSignRequestKey(temporaryKeyActSignRequestKey);
+        statusEntity.setSharedInfo2Key(sharedInfo2Key);
+        statusEntity.setMacPersonalizedDataKey(macPersonalizedDataKey);
+        statusEntity.setStatusBlobMacKey(statusBlobMacKey);
+        statusEntity.setVersion(version);
+
+        if (version == null || version == 3) {
+            statusEntity.setTransportMasterKey(transportMasterKey);
+        }
 
         appStatusRepository.save(statusEntity);
     }
@@ -85,35 +118,82 @@ public class ResultStatusService {
      * @return Deserialized activation status object.
      * @throws ActivationFailedException In case an activation with given ID does not exist.
      */
-    public JSONObject getTestStatus(String activationId) throws ActivationFailedException {
-        final Optional<TestStatusEntity> statusOptional = appStatusRepository.findById(activationId);
-        if (statusOptional.isEmpty()) {
-            throw new ActivationFailedException("Activation with given ID not found: " + activationId);
+    public ResultStatusObject getTestStatus(String activationId) throws ActivationFailedException {
+        final TestStatusEntity testStatusEntity = fetchTestStatus(activationId);
+
+        if (testStatusEntity.getVersion() == null || testStatusEntity.getVersion() == 3) {
+            return convertV3(testStatusEntity);
         }
-        final TestStatusEntity testStatusEntity = statusOptional.get();
 
-        final JSONObject result = new JSONObject();
-        result.put("activationId", testStatusEntity.getActivationId());
-        result.put("serverPublicKey", testStatusEntity.getServerPublicKey());
-        result.put("counter", testStatusEntity.getCounter());
-        result.put("ctrData", testStatusEntity.getCtrData());
-        result.put("encryptedDevicePrivateKey", testStatusEntity.getEncryptedDevicePrivateKey());
-        result.put("signatureBiometryKey", testStatusEntity.getSignatureBiometryKey());
-        result.put("signatureKnowledgeKeyEncrypted", testStatusEntity.getSignatureKnowledgeKeyEncrypted());
-        result.put("signatureKnowledgeKeySalt", testStatusEntity.getSignatureKnowledgeKeySalt());
-        result.put("signaturePossessionKey", testStatusEntity.getSignaturePossessionKey());
-        result.put("transportMasterKey", testStatusEntity.getTransportMasterKey());
-        result.put("version", 3L);
-
+        final ResultStatusObject result = new ResultStatusObject();
+        result.setActivationId(testStatusEntity.getActivationId());
+        result.setEcServerPublicKey(testStatusEntity.getEcServerPublicKey());
+        result.setPqcServerPublicKey(testStatusEntity.getPqcServerPublicKey());
+        result.setCounter(testStatusEntity.getCounter());
+        result.setCtrData(testStatusEntity.getCtrData());
+        result.setEncryptedEcDevicePrivateKey(testStatusEntity.getEncryptedEcDevicePrivateKey());
+        result.setEncryptedPqcDevicePrivateKey(testStatusEntity.getEncryptedPqcDevicePrivateKey());
+        result.setBiometryFactorKey(testStatusEntity.getBiometryFactorKey());
+        result.setKnowledgeFactorKeyEncrypted(testStatusEntity.getKnowledgeFactorKeyEncrypted());
+        result.setKnowledgeFactorKeySalt(testStatusEntity.getKnowledgeFactorKeySalt());
+        result.setPossessionFactorKey(testStatusEntity.getPossessionFactorKey());
+        result.setSharedSecretAlgorithm(testStatusEntity.getSharedSecretAlgorithm());
+        result.setTemporaryKeyActSignRequestKey(testStatusEntity.getTemporaryKeyActSignRequestKey());
+        result.setSharedInfo2Key(testStatusEntity.getSharedInfo2Key());
+        result.setMacPersonalizedDataKey(testStatusEntity.getMacPersonalizedDataKey());
+        result.setStatusBlobMacKey(testStatusEntity.getStatusBlobMacKey());
+        result.setVersion(testStatusEntity.getVersion());
         return result;
     }
 
-    private String getStringValue(JSONObject resultStatusObject, String key) {
-        return (String) resultStatusObject.get(key);
+    private static ResultStatusObject convertV3(final TestStatusEntity testStatusEntity) {
+        final ResultStatusObject result = new ResultStatusObject();
+        result.setActivationId(testStatusEntity.getActivationId());
+        result.setEcServerPublicKey(ObjectUtils.firstNonNull(testStatusEntity.getEcServerPublicKey(), testStatusEntity.getServerPublicKey()));
+        result.setCounter(testStatusEntity.getCounter());
+        result.setCtrData(testStatusEntity.getCtrData());
+        result.setEncryptedEcDevicePrivateKey(ObjectUtils.firstNonNull(testStatusEntity.getEncryptedEcDevicePrivateKey(), testStatusEntity.getEncryptedDevicePrivateKey()));
+        result.setBiometryFactorKey(ObjectUtils.firstNonNull(testStatusEntity.getBiometryFactorKey(), testStatusEntity.getSignatureBiometryKey()));
+        result.setKnowledgeFactorKeyEncrypted(ObjectUtils.firstNonNull(testStatusEntity.getKnowledgeFactorKeyEncrypted(), testStatusEntity.getSignatureKnowledgeKeyEncrypted()));
+        result.setKnowledgeFactorKeySalt(ObjectUtils.firstNonNull(testStatusEntity.getKnowledgeFactorKeySalt(), testStatusEntity.getSignatureKnowledgeKeySalt()));
+        result.setPossessionFactorKey(ObjectUtils.firstNonNull(testStatusEntity.getPossessionFactorKey(), testStatusEntity.getSignaturePossessionKey()));
+        result.setTransportMasterKey(testStatusEntity.getTransportMasterKey());
+        result.setVersion(3L);
+        return result;
     }
 
-    private Long getLongValue(JSONObject resultStatusObject, String key) {
-        return (Long) resultStatusObject.get(key);
+    /**
+     * Increment cryptographic counter.
+     * @param activationId Activation identifier.
+     * @param version Protocol version.
+     * @throws ActivationFailedException In case activation is not found.
+     * @throws GenericCryptographyException In case counter could not be incremented.
+     */
+    public void incrementCounter(String activationId, PowerAuthVersion version) throws ActivationFailedException, GenericCryptographyException {
+        final TestStatusEntity testStatusEntity = fetchTestStatus(activationId);
+
+        // Increment numeric counter
+        final Long counter = testStatusEntity.getCounter();
+        testStatusEntity.setCounter(counter + 1);
+
+        final String ctrDataBase64 = testStatusEntity.getCtrData();
+
+        // Increment hash-based counter
+        if (!ctrDataBase64.isEmpty()) {
+            byte[] ctrData = Base64.getDecoder().decode(ctrDataBase64);
+            try {
+                ctrData = new HashBasedCounter(version.value()).next(ctrData);
+            } catch (GenericCryptoException | CryptoProviderException e) {
+                throw new GenericCryptographyException(e.getMessage(), e);
+            }
+            testStatusEntity.setCtrData(Base64.getEncoder().encodeToString(ctrData));
+        }
+
+        appStatusRepository.save(testStatusEntity);
     }
 
+    private TestStatusEntity fetchTestStatus(String activationId) throws ActivationFailedException {
+        return appStatusRepository.findById(activationId).orElseThrow(() ->
+                new ActivationFailedException("Activation with given ID not found: " + activationId));
+    }
 }
